@@ -1,0 +1,11 @@
+[project]
+name = "fishtail"
+version = "0.1.0"
+description = "Bifurcations and fishtailing of a single-point-moored tanker (course project)"
+requires-python = ">=3.10"
+dependencies = ["numpy", "scipy", "matplotlib", "sympy"]
+
+[tool.pytest.ini_options]
+# Lets tests `import fishtail` from the project root without installing anything.
+pythonpath = ["."]
+testpaths = ["tests"]

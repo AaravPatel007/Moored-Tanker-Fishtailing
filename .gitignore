@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Downloaded papers: copyrighted, keep local only (index is in references/README.md)
+references/*.pdf
+
+# Editor / OS
+.vscode/
+.DS_Store

@@ -1,0 +1,63 @@
+{
+  "fig01 100 % load": {
+    "x_Tcr": 0.3587151559777549,
+    "hopf_straight_x_A": [],
+    "hopf_angled_x_A": []
+  },
+  "fig01 40 % load (ballast)": {
+    "x_Tcr": 0.1934112470408465,
+    "hopf_straight_x_A": [],
+    "hopf_angled_x_A": []
+  },
+  "fig03 100 % load": {
+    "x_Tcr": 0.3587151559777549,
+    "hopf_straight_x_A": [],
+    "hopf_angled_x_A": [
+      0.04178680991730927,
+      0.34660549767387344
+    ]
+  },
+  "fig03 40 % load (ballast)": {
+    "x_Tcr": 0.1934112470408465,
+    "hopf_straight_x_A": [
+      0.21492629103716293
+    ],
+    "hopf_angled_x_A": []
+  },
+  "fig05": {
+    "0.25": {
+      "psi_end_deg": 10.33270539246652,
+      "gamma_end_deg": 53.36786473732769
+    },
+    "0.45": {
+      "psi_end_deg": 0.04906018782637901,
+      "gamma_end_deg": 0.034257302702277385
+    }
+  },
+  "fig06_slopes": {
+    "100 % load": 1.001026407359554,
+    "40 % load (ballast)": 1.0015262003026695
+  },
+  "fig07": {
+    "0.2": {
+      "k_w": 0.0,
+      "psi_model_at_0.20": 0.0,
+      "psi_measured": 1.0
+    },
+    "0.4": {
+      "k_w": 0.77,
+      "psi_model_at_0.20": 10.886449684147019,
+      "psi_measured": 13.0
+    },
+    "0.5": {
+      "k_w": 0.82,
+      "psi_model_at_0.20": 11.473035623755258,
+      "psi_measured": 14.0
+    },
+    "0.6": {
+      "k_w": 1.03,
+      "psi_model_at_0.20": 13.773983902800767,
+      "psi_measured": 17.0
+    }
+  }
+}

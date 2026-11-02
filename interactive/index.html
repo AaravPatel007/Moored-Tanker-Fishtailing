@@ -1,0 +1,1348 @@
+<meta charset="utf-8">
+<title>Fishtailing Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a technical sheet. Top screen = controls + ship + bifurcation diagram, sized to fit one screen.
+   Below the fold = phase plane (limit cycle), eigenvalues, time trace, then the explanations.
+   Light only, square edges, black rules; one accent (orange) always means "the ship right now". */
+:root {
+  color-scheme: light;
+  --paper: #ffffff;
+  --ink: #101418;
+  --ink-2: #4b525c;
+  --mute: #8a9099;
+  --hair: #e3e6ea;
+  --streak: #c6cbd2;
+  --gamma: #2a78d6;   /* hawser angle */
+  --psi: #008300;     /* heading */
+  --force: #6250d6;   /* hawser force */
+  --now: #eb6834;     /* the current state, everywhere */
+  --crit: #d03b3b;
+  --ok: #0ca30c;
+  --warn: #eda100;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+* { box-sizing: border-box; border-radius: 0; }
+[hidden] { display: none !important; }
+html, body { background: var(--paper); color: var(--ink); }
+body {
+  margin: 0; font-family: var(--display); font-size: 14px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+.sheet { max-width: 1440px; margin: 0 auto; }
+.label { font: 700 11px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+sub { font-size: 0.72em; }
+.sym { text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+/* --- header --- */
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px;
+  padding-block: 14px 10px; border-bottom: 2px solid var(--ink); }
+.brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.brand b { font-size: 19px; font-weight: 800; font-stretch: 125%; letter-spacing: 0.02em; text-transform: uppercase; }
+.brand span { color: var(--ink-2); font-size: 13px; }
+.tabs { display: flex; gap: 22px; }
+.tabs button { font: 700 12px var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--mute);
+  background: none; border: 0; border-bottom: 3px solid transparent; padding: 6px 0 4px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.tabs button:hover { color: var(--ink); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--now); outline-offset: 2px; }
+
+/* --- control row --- */
+.controls { display: grid; grid-template-columns: minmax(170px, 230px) 1fr minmax(180px, 230px) auto; gap: 8px 28px;
+  align-items: center; padding-block: 12px 14px; border-bottom: 1px solid var(--ink); }
+.readouts, .sliders { display: grid; gap: 8px; }
+.readout-big { display: grid; gap: 3px; }
+.two .knob-value { font-size: 22px; }
+.knob-value { font: 600 34px/1 var(--mono); letter-spacing: -0.02em; }
+.knob-unit { font: 400 12px var(--mono); color: var(--ink-2); min-height: 1.2em; }
+.slider { position: relative; padding-block: 4px 18px; }
+.slider .ends { display: flex; justify-content: space-between; font: 400 11px var(--mono); color: var(--mute); margin-top: 2px; }
+.crit { position: absolute; top: 34px; transform: translateX(-50%); font: 600 11px var(--mono); color: var(--ink);
+  white-space: nowrap; pointer-events: none; }
+.crit::before { content: ""; position: absolute; left: 50%; top: -14px; height: 10px; border-left: 2px solid var(--ink); }
+.state { display: grid; gap: 6px; }
+.state-value { display: flex; align-items: center; gap: 9px; font: 800 15px var(--display); font-stretch: 112%;
+  letter-spacing: 0.04em; text-transform: uppercase; }
+.state-value i { width: 12px; height: 12px; display: inline-block; background: var(--ok); }
+.state-value[data-s^="sits"] i { background: var(--warn); }
+.state-value[data-s="fishtails"] i { background: var(--crit); }
+.state-value[data-s="swing dying out"] i { background: var(--warn); }
+.state-value[data-s^="rests"] i, .state-value[data-s^="stays"] i { background: var(--warn); }
+.state-value[data-s^="swings"] i, .state-value[data-s^="falls"] i { background: var(--crit); }
+.view-head select.btn { padding: 5px 6px; letter-spacing: 0.04em; }
+.placebar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-block: 8px;
+  border-bottom: 1px solid var(--ink); }
+.placebar .label { margin-right: 6px; }
+.placebar .btn { padding: 6px 10px; }
+.placebar .hint { font-size: 12px; color: var(--ink-2); margin-left: 8px; }
+.placebar .btn[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.btn:disabled { color: var(--mute); border-color: var(--hair); cursor: default; background: var(--paper); }
+.placed #cv-bif { cursor: pointer; }
+.placed:not(.two) .stage { height: clamp(340px, calc(100vh - 232px), 860px); height: clamp(340px, calc(100svh - 232px), 860px); }
+.two .stage { height: clamp(340px, calc(100vh - 282px), 860px); height: clamp(340px, calc(100svh - 282px), 860px); }
+.transport { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: flex-end; max-width: 380px; }
+.transport .timescale { flex-basis: 100%; text-align: right; font: 400 11px var(--mono); color: var(--ink-2); }
+.btn, select.btn { font: 700 11px var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--ink); padding: 8px 12px; cursor: pointer; }
+.btn:hover { background: var(--ink); color: var(--paper); }
+select.btn { padding-right: 6px; }
+
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; background: transparent; margin: 0; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--ink); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 28px; margin-top: -13px;
+  background: var(--now); border: 2px solid var(--ink); }
+input[type=range]::-moz-range-track { height: 2px; background: var(--ink); }
+input[type=range]::-moz-range-thumb { width: 8px; height: 24px; background: var(--now); border: 2px solid var(--ink); border-radius: 0; }
+input.scrub::-webkit-slider-thumb { background: var(--ink); width: 8px; height: 18px; margin-top: -8px; }
+input.scrub::-moz-range-thumb { background: var(--ink); width: 6px; height: 16px; }
+
+/* --- stage: ship + bifurcation diagram, one screen tall --- */
+.stage { display: grid; grid-template-columns: 1.3fr 1fr; height: clamp(340px, calc(100vh - 186px), 860px);
+  height: clamp(340px, calc(100svh - 186px), 860px); border-bottom: 2px solid var(--ink); }
+.view { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; min-width: 0; padding: 10px 0 8px; }
+.view + .view { border-left: 1px solid var(--ink); padding-left: 18px; }
+.stage .view:first-child { padding-right: 18px; }
+.view-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 6px; }
+.view-read { font: 400 12px var(--mono); color: var(--ink-2); display: flex; gap: 16px; flex-wrap: wrap; }
+.view-read b { color: var(--ink); font-weight: 600; }
+.view canvas { width: 100%; height: 100%; min-height: 0; display: block; }
+.key { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 12px; color: var(--ink-2); padding-top: 6px; }
+.key i { display: inline-block; width: 20px; vertical-align: middle; margin-right: 6px; border-top: 2px solid var(--ink); }
+.key i.dash { border-top-style: dashed; }
+.key i.blue { border-top-color: var(--gamma); }
+.key i.green { border-top-color: var(--psi); }
+.key i.violet { border-top-color: var(--force); }
+.key i.amber { border-top-color: var(--warn); }
+.key .sw { display: inline-block; width: 12px; height: 10px; margin-right: 6px; vertical-align: middle; }
+.key .dot { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: middle; background: var(--now); }
+.key .tri { font-size: 10px; margin-right: 5px; }
+
+/* --- detail (below the fold) --- */
+.section-head { display: flex; justify-content: space-between; align-items: baseline; padding-block: 22px 8px; border-bottom: 1px solid var(--ink); }
+.section-head h2 { margin: 0; font: 800 15px var(--display); font-stretch: 118%; letter-spacing: 0.06em; text-transform: uppercase; }
+.detail { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 2px solid var(--ink); }
+.detail .view { padding: 12px 18px 10px; grid-template-rows: auto auto auto auto 1fr; align-content: start; }
+.detail .view:first-child { padding-left: 0; }
+.detail .view:last-child { padding-right: 0; }
+.detail .view + .view { border-left: 1px solid var(--ink); }
+.detail canvas { aspect-ratio: 1 / 0.82; height: auto; }
+.detail select.btn { padding: 5px 6px; letter-spacing: 0.04em; }
+/* floating mini top view: bottom right, only while the big top view is out of sight */
+.mini { position: fixed; z-index: 10; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  width: min(320px, calc(100vw - 32px)); height: 210px; padding: 0 6px 6px; display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto; gap: 4px; background: var(--paper);
+  border: 2px solid var(--ink); color: var(--ink);
+  resize: both; overflow: hidden; min-width: 180px; min-height: 130px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); }
+.mini-bar { display: flex; justify-content: space-between; align-items: center; margin: 0 -6px; padding: 3px 4px 3px 8px;
+  border-bottom: 1px solid var(--ink); cursor: grab; touch-action: none; user-select: none; }
+.mini-bar:active { cursor: grabbing; }
+.mini-x { font: 700 16px/1 var(--display); background: none; border: 0; padding: 2px 6px; cursor: pointer; color: var(--ink); }
+.mini-x:hover { background: var(--ink); color: var(--paper); }
+.mini canvas { width: 100%; height: 100%; min-height: 0; display: block; cursor: pointer; }
+.mini-show { padding: 4px 8px; margin-right: 12px; }
+.mini-read { font: 400 11px/1.35 var(--mono); color: var(--ink-2); }
+@media (max-width: 600px) { .mini { width: 210px; height: 150px; } }
+/* eigenvalue read-out under the plot: one row per rest position, then the verdict in words */
+.eig-read { padding-top: 8px; font-size: 12px; color: var(--ink-2); }
+.eig-read table { border-collapse: collapse; width: 100%; font: 400 11px/1.35 var(--mono); font-variant-numeric: tabular-nums; }
+.eig-read th { font: 700 11px var(--display); letter-spacing: 0.04em; text-align: left;
+  color: var(--ink-2); padding: 0 6px 3px 0; border-bottom: 1px solid var(--ink); }
+.eig-read td { padding: 3px 6px 3px 0; vertical-align: top; border-bottom: 1px solid var(--hair); color: var(--ink); }
+.eig-read td.up { color: var(--crit); font-weight: 600; }
+.eig-read .mk { display: inline-block; width: 9px; height: 9px; margin-right: 5px; vertical-align: -1px; border: 2px solid; }
+.eig-read p { margin: 6px 0 0; line-height: 1.45; }
+.eig-read .verdict { color: var(--ink); font-size: 13px; }
+.scrub-row { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; font: 400 11px var(--mono); color: var(--ink-2); padding-top: 4px; }
+
+.about { display: grid; grid-template-columns: 1fr 1fr; gap: 0 48px; padding-top: 14px; }
+.about h3 { font: 700 12px var(--display); letter-spacing: 0.12em; text-transform: uppercase; margin: 10px 0 6px; }
+.about p, .about li { max-width: 68ch; color: var(--ink); margin: 0 0 8px; }
+.about ul { margin: 0; padding-left: 18px; }
+.about .muted { color: var(--ink-2); }
+.missing { margin-top: 16px; padding: 18px; border: 1px solid var(--ink); }
+.missing code { font-family: var(--mono); }
+
+@media (max-width: 900px) {
+  .controls { grid-template-columns: 1fr; }
+  .stage { grid-template-columns: 1fr; height: auto; }
+  .stage .view:first-child { padding-right: 0; }
+  .view + .view { border-left: 0; padding-left: 0; border-top: 1px solid var(--ink); }
+  .stage canvas { aspect-ratio: 4 / 3; height: auto; }
+  .detail { grid-template-columns: 1fr; }
+  .detail .view { padding-left: 0; padding-right: 0; }
+  .detail .view + .view { border-left: 0; border-top: 1px solid var(--ink); }
+  .about { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="sheet">
+  <header class="top">
+    <div class="brand"><b>Fishtailing Lab</b><span>320 m tanker · rigid hawser · steady current</span></div>
+    <nav class="tabs" aria-label="Choose a demo">
+      <button type="button" id="tab-pitchfork">Pitchfork</button>
+      <button type="button" id="tab-fishtailing">Fishtailing</button>
+      <button type="button" id="tab-hawser_length">Hawser length</button>
+      <button type="button" id="tab-wind">Wind</button>
+      <button type="button" id="tab-tug">Tug</button>
+      <button type="button" id="tab-thruster">Thruster</button>
+    </nav>
+  </header>
+
+  <div id="missing" class="missing" hidden>
+    The data for this demo has not been computed yet. From the project folder run
+    <code>/home/aarav-patel/wec_rl/.venv/bin/python -m interactive.build_demos</code> and reload the page.
+  </div>
+
+  <section class="controls" aria-label="Controls">
+    <div class="readouts">
+      <div class="readout-big">
+        <div class="label" id="knob-name">Knob</div>
+        <div class="knob-value" id="knob-val">0</div>
+        <div class="knob-unit" id="knob-unit"></div>
+      </div>
+      <div class="readout-big" id="readout2" hidden>
+        <div class="label" id="knob2-name">Knob 2</div>
+        <div class="knob-value" id="knob2-val">0</div>
+        <div class="knob-unit" id="knob2-unit"></div>
+      </div>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <input type="range" id="knob" min="0" max="10" step="1" value="0">
+        <div class="crit" id="crit"></div>
+        <div class="ends"><span id="end-lo"></span><span id="end-hi"></span></div>
+      </div>
+      <div class="slider" id="slider2" hidden>
+        <input type="range" id="knob2" min="0" max="10" step="1" value="0">
+        <div class="ends"><span id="end2-lo"></span><span id="end2-hi"></span></div>
+      </div>
+    </div>
+    <div class="state">
+      <div class="label">The ship</div>
+      <div class="state-value" id="status" data-s="trails straight" aria-live="polite"><i></i><span id="status-text">Trails straight</span></div>
+    </div>
+    <div class="transport">
+      <button type="button" class="btn" id="play">Pause</button>
+      <button type="button" class="btn" id="restart">Restart</button>
+      <button type="button" class="btn" id="reset" hidden title="No wind, ship resting to port">Reset ship</button>
+      <select class="btn" id="speed" aria-label="Playback speed (1× = ten units of t* per second)">
+        <option value="0.5">½×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="4">4×</option>
+      </select>
+      <div class="timescale" id="timescale"></div>
+    </div>
+  </section>
+
+  <section class="placebar" id="placebar" aria-label="Put the ship on a branch" hidden>
+    <span class="label" id="place-label">Put the ship on</span>
+    <button type="button" class="btn" id="put-mid-port">Unstable middle, nudge → port</button>
+    <button type="button" class="btn" id="put-mid-stbd">Unstable middle, nudge → starboard</button>
+    <button type="button" class="btn" id="put-port">Port branch</button>
+    <button type="button" class="btn" id="put-stbd">Starboard branch</button>
+    <span class="hint" id="place-hint">or click a branch in the diagram · greyed out = that branch does not exist for this wind</span>
+  </section>
+
+  <section class="placebar" id="limitbar" aria-label="Thrust limit" hidden>
+    <span class="label">Thrust limit</span>
+    <button type="button" class="btn" id="lim-0">No limit</button>
+    <button type="button" class="btn" id="lim-1">0.02 F<sub>H0</sub></button>
+    <button type="button" class="btn" id="lim-2">0.01 F<sub>H0</sub></button>
+    <span class="hint" id="lim-hint">PLACEHOLDER sizes · click the map to pick gains</span>
+  </section>
+
+  <main class="stage">
+    <section class="view" aria-label="Top view">
+      <div class="view-head">
+        <span class="label">Top view</span>
+        <span class="view-read"><span>t* <b id="r-t">0</b></span><span>γ <b id="r-g">0</b></span><span>ψ <b id="r-p">0</b></span><span>F<sub>H</sub>/F<sub>H0</sub> <b id="r-f">1</b></span></span>
+      </div>
+      <canvas id="cv-top" role="img" aria-label="Top view: the buoy on the right, the hawser, and the ship trailing downstream. The current flows from right to left."></canvas>
+      <div class="key"><span>current: right to left</span><span><i style="border-top-color:var(--mute)"></i>stern path</span></div>
+    </section>
+    <section class="view" aria-label="Bifurcation diagram">
+      <div class="view-head"><span class="label">Bifurcation diagram</span>
+        <select class="btn" id="bifview" aria-label="Which bifurcation diagram" hidden>
+          <option value="force">ψ vs wind force (move along it)</option>
+          <option value="xa">ψ vs attachment point</option>
+        </select>
+      </div>
+      <canvas id="cv-bif" role="img" aria-label="Bifurcation diagram with a marker at the current slider value."></canvas>
+      <div class="key" id="bif-key"></div>
+    </section>
+  </main>
+
+  <div class="mini" id="mini" role="group" aria-label="Small top view of the ship" hidden>
+    <div class="mini-bar" id="mini-bar" title="Drag to move">
+      <span class="label">Ship now</span>
+      <button type="button" class="mini-x" id="mini-close" aria-label="Hide the small ship view">×</button>
+    </div>
+    <canvas id="cv-mini" role="img" aria-label="Small top view of the ship. Click to go back to the big top view." title="Click: back to the top view"></canvas>
+    <span class="mini-read" id="mini-read"></span>
+  </div>
+
+  <div class="section-head"><h2>Detail</h2>
+    <span><button type="button" class="btn mini-show" id="mini-show" aria-pressed="false">Show ship view</button>
+    <span class="label">same run as above</span></span></div>
+  <section class="detail">
+    <section class="view" aria-label="Phase plane">
+      <div class="view-head">
+        <span class="label">Phase plane · limit cycle</span>
+        <select class="btn" id="proj" aria-label="Which phase plane">
+          <option value="psi">ψ vs dψ/dt*</option>
+          <option value="gamma">γ vs dγ/dt*</option>
+          <option value="gp">γ vs ψ</option>
+        </select>
+      </div>
+      <canvas id="cv-phase" role="img" aria-label="Phase plane: path so far in blue, rest of the path in grey, current state in orange."></canvas>
+      <div class="key"><span><i class="blue"></i>path</span><span><span class="dot"></span>now</span><span>● stable</span><span>○ unstable</span></div>
+    </section>
+    <section class="view" aria-label="Eigenvalues">
+      <div class="view-head"><span class="label">Eigenvalues</span></div>
+      <canvas id="cv-eig" role="img" aria-label="Eigenvalues of the rest positions in the complex plane."></canvas>
+      <div class="key" id="eig-key"></div>
+      <div class="eig-read" id="eig-read" aria-live="polite"></div>
+    </section>
+    <section class="view" aria-label="Time trace">
+      <div class="view-head"><span class="label">Time trace</span></div>
+      <canvas id="cv-time" role="img" aria-label="Hawser angle, heading and hawser force against time. Click to jump."></canvas>
+      <div class="scrub-row"><span>t* 0</span><input type="range" class="scrub" id="scrub" min="0" max="900" step="1" value="0" aria-label="Time"><span id="t-end">300</span></div>
+      <div class="key" id="time-key"><span><i class="blue"></i>γ</span><span><i class="green"></i>ψ</span><span><i class="violet"></i>F<sub>H</sub>/F<sub>H0</sub></span></div>
+    </section>
+  </section>
+
+  <div class="section-head"><h2>About this demo</h2></div>
+  <section class="about">
+    <div>
+      <h3>What it shows</h3>
+      <p id="story"></p>
+      <p class="muted" id="knob-help"></p>
+      <p class="muted" id="linear"></p>
+      <h3>The model</h3>
+      <p>Vidal de Negreiros VLCC, fully loaded (L = 320 m), held by a hawser of fixed length. Water forces: Leite et al. (1998) with the yaw-rate terms of Simos (2001). Every frame here was computed in Python (<span class="mono">fishtail/model_rigid.py</span>) and is only played back, so the page shows exactly what the report shows.</p>
+    </div>
+    <div>
+      <h3>How to read it</h3>
+      <ul>
+        <li><b>Top view.</b> The buoy is the ringed dot; the current comes from the right. The streaks show the direction of the current, not its speed. Every run starts from the same small nudge (hawser 3° to port, bow 1° to port). In the Pitchfork tab you can nudge the ship to starboard instead, or put it on an angled rest position; those buttons are greyed out forward of the pitchfork point, where the angled positions do not exist. In the Wind tab a greyed-out button means that branch does not exist for this wind.</li>
+        <li id="bif-help"></li>
+        <li id="control-help" hidden><b>Control tabs.</b> Every run starts while the ship fishtails fully (the swing without control at this friction) and the control starts at t* = 0. <i>Tug:</i> a hold-back tug made fast at the stern pulls steadily downstream (amber block and arrow). It is the wind force of the Wind tab, coming from ahead and acting at the stern. Once the bow swings off, the pull gets a sideways part that turns it back (a weathervane tail) and it adds to the hawser tension. <i>Thruster:</i> the tanker's own stern thruster pushes sideways (amber arrow, dashed when at its limit), N = −k<sub>p</sub> ψ − k<sub>d</sub> r in units of ½ρU²L²T: k<sub>p</sub> is a spring back to straight, k<sub>d</sub> a damper on the turning. In the time trace the amber line is the thruster force and the dotted amber lines are the limit. "Swing dying out" means the swing is still visible at the end of the shown run but decays (checked by running on for 800 t*). Thrust limit, tug pull range and the stern positions are PLACEHOLDERs (decision D31); forces in N (1:90 model) and kN (real ship) are given where a current speed gives this friction.</li>
+        <li><b>Phase plane.</b> A path that spirals into a dot: the ship settles there. A path that winds onto a closed loop: a limit cycle, i.e. fishtailing. It is a 2-D view of a 4-D motion, so the path may cross itself.</li>
+        <li><b>Eigenvalues.</b> Each rest position has four eigenvalues λ, one per state (γ, ψ and their rates), so three rest positions (Wind tab: port, starboard, middle) give twelve. A small disturbance changes like e<sup>λ t*</sup>: the <i>real part</i> Re λ is the growth rate, the <i>imaginary part</i> Im λ = ω says how fast it swings (period 2π/ω; ω = 0 means no swinging). Right of the vertical line is the <b>right half-plane (RHP)</b>, Re λ &gt; 0: there a disturbance grows, so a rest position with any λ in the RHP is unstable. A bifurcation happens when an eigenvalue crosses the line, and <b>how</b> it crosses decides which one: a <b>real</b> λ passing through 0 (▲) means the ship drifts off without swinging and finds new rest positions, a <b>pitchfork</b>; a <b>complex pair</b> crossing at ±ω (●) means the disturbance grows while it swings and levels off on a limit cycle, a <b>Hopf</b> bifurcation, i.e. fishtailing. In the Wind tab a real λ of the middle position and one of a side position close in on 0 from both sides as the force nears the fold (◇), where those two positions meet and vanish. One λ of every rest position is far to the left (below −1.7 U/L, gone within half a t*); it never decides stability, so it is only listed in the table ("fast λ"), not plotted. Mirror-image rest positions (port and starboard with no sideways wind) have the same λ, so their markers lie on top of each other and they share one row of the table. Grey dots: the same rest positions at the other slider values (Wind tab: the other forces from this direction), so you can see the path the λ follow as you move the slider.</li>
+        <li><b>Time trace.</b> Top: hawser angle γ (blue) and heading ψ (green). Bottom: hawser force F<sub>H</sub>/F<sub>H0</sub> (violet), the tension divided by its value when the ship trails straight without wind (dotted line = 1).</li>
+        <li><b>Time t*.</b> Measured in the time the current needs to pass one ship length, t* = U t / L. For the real ship in a 1 m/s current one unit is 320 s, about 5 minutes. Playback: at 1× one second on screen is ten units of t* (½× to 4×). The line under the speed menu says how long one unit of t* lasts in real time, t = t* L / U: for the 1:90 tank model and for the real ship, each at the current speed that gives this friction coefficient C<sub>F</sub> (the real ship only where such a speed exists: at the friction values of the Pitchfork, Hawser-length and Wind tabs it would need a current slower than 1 cm/s). Real-time playback is not offered because one unit of t* lasts from seconds to hours.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script src="pitchfork/data.js"></script>
+<script src="fishtailing/data.js"></script>
+<script src="hawser_length/data.js"></script>
+<script src="wind/data.js"></script>
+<script src="tug/data.js"></script>
+<script src="thruster/data.js"></script>
+<script src="thruster/limit1.js"></script>
+<script src="thruster/limit2.js"></script>
+<script>
+(function () {
+  "use strict";
+  const ALL = window.FISHTAIL_DEMOS || {};
+  const EXTRA = window.FISHTAIL_EXTRA || {};
+  const ORDER = ["pitchfork", "fishtailing", "hawser_length", "wind", "tug", "thruster"];
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const $ = (id) => document.getElementById(id);
+  const S = { demo: null, idx: 0, idx2: 0, frame: 0, playing: !reduceMotion, speed: 1, proj: "psi", last: null,
+              side: 1, wrun: null, bifView: "force", flow: 0, bifMap: null,
+              start: { kind: "nudge", side: 1 }, restRun: null, eigHtml: "", limit: 0, gridRun: null };
+  // playback speed at 1x: 10 units of t* per second, whatever the frame spacing of a run. (Tried 1 t* per second:
+  // too choppy, the runs store only 2-3 frames per t*.)
+  const TSTAR_PER_SEC = 10;
+  const FLOW_SPEED = 0.25; // on-screen speed of the water streaks [ship lengths per second]: shows the direction only
+  const C = {};
+  const VIEW = {};
+  const MONO = '11px "JetBrains Mono", ui-monospace, Menlo, monospace';
+  const SANS = '12px "Archivo", "Helvetica Neue", Arial, sans-serif';
+
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    ["paper", "ink", "ink-2", "mute", "hair", "streak", "gamma", "psi", "force", "now", "crit", "warn"].forEach(
+      (k) => { C[k] = cs.getPropertyValue("--" + k).trim(); });
+  }
+
+  // ---------- helpers ----------
+  function niceStep(span, n) {
+    const raw = span / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), e = raw / mag;
+    return mag * (e >= 7.5 ? 10 : e >= 3.5 ? 5 : e >= 1.5 ? 2 : 1);
+  }
+  function ticks(lo, hi, n) {
+    const st = niceStep(hi - lo, n), out = [];
+    for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9 * st; v += st) out.push(Math.abs(v) < 1e-12 ? 0 : v);
+    return out;
+  }
+  function fmt(v, step) { return v.toFixed(Math.min(Math.max(0, -Math.floor(Math.log10(step) + 1e-9)), 4)); }
+  function setupCanvas(cv) {
+    const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    return { ctx, w, h };
+  }
+  // Text with subscripts: "x_A/L" draws the A smaller and lower.
+  function richText(ctx, text, x, y, align) {
+    const parts = text.split(/(_[A-Za-z0-9]+)/).filter(Boolean);
+    const base = ctx.font, size = parseFloat(base.match(/([\d.]+)px/)[1]);
+    const subFont = base.replace(/[\d.]+px/, Math.round(size * 0.76) + "px");
+    const widths = parts.map((p) => { ctx.font = p[0] === "_" ? subFont : base; return ctx.measureText(p[0] === "_" ? p.slice(1) : p).width; });
+    const total = widths.reduce((a, b) => a + b, 0);
+    let cx = align === "center" ? x - total / 2 : align === "right" ? x - total : x;
+    ctx.textAlign = "left";
+    parts.forEach((p, k) => {
+      const sub = p[0] === "_";
+      ctx.font = sub ? subFont : base;
+      ctx.fillText(sub ? p.slice(1) : p, cx, y + (sub ? size * 0.3 : 0));
+      cx += widths[k];
+    });
+    ctx.font = base;
+  }
+  function pretty(s) {
+    const esc = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return esc.replace(/_([A-Za-z0-9]+)/g, "<sub>$1</sub>");
+  }
+  // Axes: hairline grid, ink axis lines, mono tick labels. Returns the mapping.
+  function axes(ctx, w, h, xr, yr, xlabel, ylabel, opt) {
+    opt = opt || {};
+    const L = 50, R = 18, T = 6, B = 38;
+    const x0 = L, y0 = T, pw = w - L - R, ph = h - T - B;
+    const rev = !!opt.reverseX;
+    const X = (v) => x0 + (rev ? (xr[1] - v) : (v - xr[0])) / (xr[1] - xr[0]) * pw;
+    const Y = (v) => y0 + (yr[1] - v) / (yr[1] - yr[0]) * ph;
+    const xt = ticks(xr[0], xr[1], opt.nx || 5), yt = ticks(yr[0], yr[1], opt.ny || 5);
+    const xs = xt.length > 1 ? xt[1] - xt[0] : 1, ys = yt.length > 1 ? yt[1] - yt[0] : 1;
+    ctx.lineWidth = 1; ctx.strokeStyle = C.hair;
+    ctx.font = MONO; ctx.fillStyle = C["ink-2"];
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    xt.forEach((v) => { ctx.beginPath(); ctx.moveTo(X(v), y0); ctx.lineTo(X(v), y0 + ph); ctx.stroke(); ctx.fillText(fmt(v, xs), X(v), y0 + ph + 5); });
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    yt.forEach((v) => { ctx.beginPath(); ctx.moveTo(x0, Y(v)); ctx.lineTo(x0 + pw, Y(v)); ctx.stroke(); ctx.fillText(fmt(v, ys), x0 - 6, Y(v)); });
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0, y0 + ph); ctx.lineTo(x0 + pw, y0 + ph); ctx.stroke();
+    ctx.font = SANS; ctx.fillStyle = C.ink; ctx.textBaseline = "bottom";
+    if (xlabel) richText(ctx, xlabel, x0 + pw / 2, h - 2, "center");
+    ctx.save(); ctx.translate(12, y0 + ph / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = "middle"; richText(ctx, ylabel, 0, 0, "center"); ctx.restore();
+    return { X, Y, x0, y0, pw, ph };
+  }
+  function clipTo(ctx, m) { ctx.save(); ctx.beginPath(); ctx.rect(m.x0, m.y0, m.pw, m.ph); ctx.clip(); }
+  function polyline(ctx, xs, ys, X, Y, from, to) {
+    ctx.beginPath();
+    for (let i = from; i < to; i++) { const px = X(xs[i]), py = Y(ys[i]); i === from ? ctx.moveTo(px, py) : ctx.lineTo(px, py); }
+    ctx.stroke();
+  }
+  function dot(ctx, x, y, r, fill, stroke, lw) {
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1.5; ctx.stroke(); }
+  }
+  function triangle(ctx, x, y, r) {
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r * 0.75); ctx.lineTo(x - r, y + r * 0.75); ctx.closePath();
+    ctx.fillStyle = C.ink; ctx.fill(); ctx.strokeStyle = C.paper; ctx.lineWidth = 2; ctx.stroke();
+  }
+  function diamond(ctx, x, y, r) { // fold (saddle-node) point
+    ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
+    ctx.fillStyle = C.paper; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+  }
+  function range(arr, pad) {
+    let lo = Infinity, hi = -Infinity;
+    arr.forEach((v) => { if (v < lo) lo = v; if (v > hi) hi = v; });
+    if (!isFinite(lo)) { lo = -1; hi = 1; }
+    if (hi - lo < 1e-6) { lo -= 1; hi += 1; }
+    const p = (hi - lo) * (pad === undefined ? 0.08 : pad);
+    return [lo - p, hi + p];
+  }
+
+  // ---------- mooring geometry (same as fishtail/model_rigid.positions) ----------
+  const D2R = Math.PI / 180;
+  function pose(run, i) {
+    const g = run.g[i] * D2R, p = run.p[i] * D2R, xa = run.x_A_L, lh = run.L_H_L;
+    const ex = [Math.cos(p), Math.sin(p)], ey = [-Math.sin(p), Math.cos(p)];
+    const A = [-lh * Math.cos(g), lh * Math.sin(g)];
+    return { A, O: [A[0] - xa * ex[0], A[1] - xa * ex[1]], ex, ey };
+  }
+  function hullPts(ps, b) {
+    const body = [[-0.5, -b], [0.36, -b], [0.5, 0], [0.36, b], [-0.5, b]];
+    return body.map(([x, y]) => [ps.O[0] + x * ps.ex[0] + y * ps.ey[0], ps.O[1] + x * ps.ex[1] + y * ps.ey[1]]);
+  }
+  function computeView(d) {
+    let xmin = -0.5, ymax = 0.25;
+    const b = d.B_L / 2;
+    d.runs.forEach((run) => {
+      for (let i = 0; i < run.g.length; i += 3) {
+        hullPts(pose(run, i), b).forEach(([x, y]) => { if (x < xmin) xmin = x; if (Math.abs(y) > ymax) ymax = Math.abs(y); });
+      }
+    });
+    return { xmin: xmin - 0.06, xmax: 0.3, ymax: ymax + 0.06 };
+  }
+
+  // ---------- panels ----------
+  function current() {
+    const d = ALL[S.demo];
+    return { d, run: d.trans ? S.wrun : d.runs_stbd ? pitchforkRun(d) : d.grid ? gridRun(d) : d.runs[S.idx] };
+  }
+
+  // ---------- control tabs (tug, thruster): two sliders, one run per slider position, no history ----------
+  // The run of setting (idx, idx2), with the rest positions of that setting added. Thruster tab: one run set per
+  // thrust limit (set 0 in data.js, the others in thruster/limit1.js, limit2.js).
+  function runSet(d) { return d.thruster && S.limit > 0 ? EXTRA.thruster["limit" + S.limit] : d.runs; }
+  function gridRun(d) {
+    const si = settingOf(S.idx, S.idx2), key = S.demo + "|" + si + "|" + S.limit;
+    if (!S.gridRun || S.gridRun.key !== key) {
+      const st = d.settings[si];
+      S.gridRun = { key, run: Object.assign({}, padRun(runSet(d)[si], d.n_frames), { equilibria: st.equilibria,
+        x_A_L: st.x_A_L, L_H_L: st.L_H_L, tug: st.tug, gains: st.gains }) };
+    }
+    return S.gridRun.run;
+  }
+
+  // ---------- pitchfork demo: choose how the ship starts ----------
+  // S.start = { kind: "nudge" | "rest", side: +1 port / -1 starboard }. "nudge": the straight position with the small
+  // nudge to that side (Python runs d.runs / d.runs_stbd). "rest": sitting on the angled rest position of that side, a
+  // run that does not move (rest values from Python). If that angled position does not exist at this slider value
+  // (attachment point forward of the pitchfork), the ship is nudged to that side instead.
+  function startNow(d) {
+    const st = S.start, e = d.runs[S.idx].equilibria.find((q) => q.side === st.side);
+    return st.kind === "rest" && e ? { kind: "rest", side: st.side, eq: e } : { kind: "nudge", side: st.side };
+  }
+  function pitchforkRun(d) {
+    const st = startNow(d), base = d.runs[S.idx];
+    if (st.kind === "nudge") return st.side > 0 ? base : d.runs_stbd[S.idx];
+    const key = S.idx + "|" + st.side;
+    if (!S.restRun || S.restRun.key !== key) {
+      const n = base.g.length, fill = (v) => new Array(n).fill(v), e = st.eq;
+      S.restRun = { key, run: Object.assign({}, base, { g: fill(e.g), p: fill(e.p), gd: fill(0), pd: fill(0), F: fill(e.F),
+        status: "rests at an angle to " + (st.side > 0 ? "port" : "starboard") }) };
+    }
+    return S.restRun.run;
+  }
+
+  // ---------- wind demo: the ship keeps its history ----------
+  // Settings are stored knob-1-major: setting = idx * (number of knob-2 values) + idx2. Moving a slider one step means
+  // "the wind changes, then stays"; the run for that step starts where the ship was resting (d.trans, from Python).
+  function settingOf(i, j) { return i * ALL[S.demo].knob2.values.length + j; }
+  // Python stops storing a wind run once its values no longer change (the ship has settled); repeat the last frame
+  // to get back the full length n.
+  function padRun(run, n) {
+    if (run.g.length >= n) return run;
+    const out = Object.assign({}, run);
+    ["g", "p", "gd", "pd", "F", "T"].filter((k) => run[k]).forEach((k) => { const a = run[k].slice(); while (a.length < n) a.push(a[a.length - 1]); out[k] = a; });
+    return out;
+  }
+  function viewRun(si, trans, sideBefore, statusText) {
+    const d = ALL[S.demo], st = d.settings[si], nf = d.n_frames || d.runs[0].g.length;
+    if (trans) trans = padRun(trans, nf);
+    let run, status;
+    if (trans && statusText) {
+      run = trans; status = statusText;
+    } else if (trans) {
+      run = trans;
+      const where = trans.end_side > 0 ? "port" : "starboard";
+      status = trans.end_side === sideBefore ? "stays to " + where : "swings across to " + where;
+    } else { // at rest: a run that does not move
+      const e = st.equilibria.find((q) => q.stable && q.side === sideBefore), n = nf;
+      const fill = (v) => new Array(n).fill(v);
+      run = { dt: d.runs[0].dt, end_side: sideBefore, g: fill(e.g), p: fill(e.p), gd: fill(0), pd: fill(0), F: fill(e.F) };
+      status = "rests to " + (sideBefore > 0 ? "port" : "starboard");
+    }
+    return Object.assign({}, run, { equilibria: st.equilibria, diagram: st.diagram, wind: st.wind,
+                                    x_A_L: st.x_A_L, L_H_L: st.L_H_L, status });
+  }
+  // Walk one slider step at a time from (i0, j0) to (i1, j1), carrying the ship's side; play only the last step.
+  function moveWind(i1, j1) {
+    const d = ALL[S.demo];
+    let i = S.idx, j = S.idx2, last = null, before = S.side;
+    while (i !== i1 || j !== j1) {
+      const ni = i !== i1 ? i + Math.sign(i1 - i) : i, nj = i === i1 ? j + Math.sign(j1 - j) : j;
+      const t = d.runs[d.trans[settingOf(i, j) + "|" + S.side + "|" + settingOf(ni, nj)]];
+      before = S.side; S.side = t.end_side; last = t; i = ni; j = nj;
+    }
+    S.idx = i1; S.idx2 = j1;
+    S.wrun = viewRun(settingOf(i1, j1), last, before);
+    S.frame = 0;
+  }
+  // Put the ship straight onto a branch of the current wind setting: a stable rest position (it just sits there), or
+  // the unstable middle one with a small nudge (precomputed run: it falls off to that side).
+  function putOnSide(side) {
+    const dd = ALL[S.demo];
+    if (dd.runs_stbd) { // pitchfork demo: sit on the angled rest position of that side (if it exists here)
+      if (dd.runs[S.idx].equilibria.some((e) => e.side === side)) { S.start = { kind: "rest", side }; S.frame = 0; }
+      return;
+    }
+    const si = settingOf(S.idx, S.idx2);
+    if (!ALL[S.demo].settings[si].equilibria.some((e) => e.stable && e.side === side)) return;
+    S.side = side; S.wrun = viewRun(si, null, side); S.frame = 0;
+  }
+  function putOnMiddle(side) {
+    if (ALL[S.demo].runs_stbd) { S.start = { kind: "nudge", side }; S.frame = 0; return; } // pitchfork: straight + nudge
+    const d = ALL[S.demo], si = settingOf(S.idx, S.idx2), k = d.settings[si].nudge[String(side)];
+    if (k === undefined) return;
+    const t = d.runs[k], where = t.end_side > 0 ? "port" : "starboard";
+    S.side = t.end_side;
+    S.wrun = viewRun(si, t, null, "falls off the middle to " + where);
+    S.frame = 0;
+  }
+  function updatePlaceButtons() {
+    const d = ALL[S.demo];
+    if (d && d.runs_stbd) { // pitchfork: nudges always possible; angled rest only aft of the pitchfork point
+      const eqs = d.runs[S.idx].equilibria, st = startNow(d);
+      $("put-port").disabled = !eqs.some((e) => e.side === 1); $("put-stbd").disabled = !eqs.some((e) => e.side === -1);
+      $("put-mid-port").disabled = false; $("put-mid-stbd").disabled = false;
+      [["put-mid-port", "nudge", 1], ["put-mid-stbd", "nudge", -1], ["put-port", "rest", 1], ["put-stbd", "rest", -1]]
+        .forEach(([id, kind, side]) => $(id).setAttribute("aria-pressed", String(st.kind === kind && st.side === side)));
+      return;
+    }
+    if (!d || !d.trans) return;
+    const st = d.settings[settingOf(S.idx, S.idx2)];
+    const has = (side) => st.equilibria.some((e) => e.stable && e.side === side);
+    $("put-port").disabled = !has(1); $("put-stbd").disabled = !has(-1);
+    $("put-mid-port").disabled = st.nudge["1"] === undefined; $("put-mid-stbd").disabled = st.nudge["-1"] === undefined;
+  }
+  function resetWind() {
+    const d = ALL[S.demo];
+    S.idx = d.knob.default; S.idx2 = d.knob2.default; S.side = d.start_side;
+    S.wrun = viewRun(settingOf(S.idx, S.idx2), null, S.side);
+    $("knob").value = String(S.idx); $("knob2").value = String(S.idx2);
+    S.frame = 0;
+  }
+  function frameIndex() { return Math.min(Math.floor(S.frame), current().run.g.length - 1); }
+
+  // Top view, drawn on the big canvas or (mini = true) on the small floating one, which leaves out the labels.
+  function drawTop(cv, mini) {
+    const { d, run } = current();
+    const { ctx, w, h } = setupCanvas(cv);
+    const v = VIEW[S.demo];
+    const sc = Math.min(w / (v.xmax - v.xmin), h / (2 * v.ymax));
+    const cx = (w - sc * (v.xmax - v.xmin)) / 2, cy = h / 2;
+    const P = (x, y) => [cx + (x - v.xmin) * sc, cy - y * sc];
+    const i = frameIndex(), tstar = i * run.dt;
+    // water streaks: drift to the left (-X, the way the current flows) at a steady on-screen speed. The real water
+    // passes one ship length per unit t*, far too fast to draw at 10 t* per second, so they show the direction only.
+    ctx.strokeStyle = C.streak; ctx.lineWidth = 1;
+    const gap = 0.34, len = 0.07, shift = reduceMotion ? 0 : (S.flow % gap);
+    for (let y = -v.ymax + 0.05, row = 0; y < v.ymax; y += 0.11, row++) {
+      const off = (row % 2) * gap / 2;
+      for (let x = v.xmax + gap - shift - off; x > v.xmin - gap; x -= gap) {
+        const [a1, b1] = P(x, y), [a2] = P(x - len, y);
+        ctx.beginPath(); ctx.moveTo(a1, b1); ctx.lineTo(a2, b1); ctx.stroke();
+      }
+    }
+    // the current line through the buoy (reference for the angles)
+    ctx.strokeStyle = C.mute; ctx.setLineDash([2, 5]);
+    const [lx0, ly] = P(v.xmin, 0), [lx1] = P(v.xmax, 0);
+    ctx.beginPath(); ctx.moveTo(lx0, ly); ctx.lineTo(lx1, ly); ctx.stroke(); ctx.setLineDash([]);
+    // stern trail, last 12 t*
+    const n0 = Math.max(0, i - 36), b = d.B_L / 2;
+    ctx.strokeStyle = C.mute; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let k = n0; k <= i; k++) {
+      const ps = pose(run, k), [px, py] = P(ps.O[0] - 0.5 * ps.ex[0], ps.O[1] - 0.5 * ps.ex[1]);
+      k === n0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    // hawser: thicker with more tension; dashed red if the rigid bar has to push
+    const ps = pose(run, i), F = run.F[i];
+    const [ax, ay] = P(ps.A[0], ps.A[1]), [bx, by] = P(0, 0);
+    ctx.lineWidth = 1.4 + 2.2 * Math.max(0, Math.min(F, 3.5)) / 3.5;
+    ctx.strokeStyle = F < 0 ? C.crit : C.ink;
+    ctx.setLineDash(F < 0 ? [6, 4] : []);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ax, ay); ctx.stroke(); ctx.setLineDash([]);
+    // ship: solid ink silhouette with a white centreline
+    const pts = hullPts(ps, b).map(([x, y]) => P(x, y));
+    ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+    ctx.fillStyle = C.ink; ctx.fill();
+    const [s1x, s1y] = P(ps.O[0] - 0.42 * ps.ex[0], ps.O[1] - 0.42 * ps.ex[1]), [s2x, s2y] = P(ps.O[0] + 0.38 * ps.ex[0], ps.O[1] + 0.38 * ps.ex[1]);
+    ctx.strokeStyle = C.paper; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(s1x, s1y); ctx.lineTo(s2x, s2y); ctx.stroke();
+    // control force at the stern (D31): the tug's line pulling downstream (-X), or the thruster's sideways push
+    const stern = [ps.O[0] - 0.5 * ps.ex[0], ps.O[1] - 0.5 * ps.ex[1]];
+    const arrow = (from, to, color, dashed) => {
+      const [x0, y0] = P(from[0], from[1]), [x1, y1] = P(to[0], to[1]), a = Math.atan2(y1 - y0, x1 - x0);
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5; ctx.setLineDash(dashed ? [5, 3] : []);
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - 9 * Math.cos(a - 0.45), y1 - 9 * Math.sin(a - 0.45));
+      ctx.lineTo(x1 - 9 * Math.cos(a + 0.45), y1 - 9 * Math.sin(a + 0.45)); ctx.closePath(); ctx.fill();
+    };
+    if (run.tug && run.tug.ratio > 0) { // tug line: length grows with the pull; the tug itself is the small block
+      const len = 0.08 + 0.12 * Math.min(run.tug.ratio, 2.4) / 2.4, end = [stern[0] - len, stern[1]];
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2;
+      ctx.beginPath(); const [t0x, t0y] = P(stern[0], stern[1]), [t1x, t1y] = P(end[0], end[1]);
+      ctx.moveTo(t0x, t0y); ctx.lineTo(t1x, t1y); ctx.stroke();
+      ctx.fillStyle = C.warn; ctx.fillRect(t1x - 7, t1y - 4, 10, 8); ctx.strokeRect(t1x - 7, t1y - 4, 10, 8);
+      arrow([end[0] - 0.01, end[1]], [end[0] - 0.01 - len * 0.6, end[1]], C.warn);
+    }
+    if (run.T) { // thruster: arrow along the ship's sideways axis e_y, length ~ thrust; dashed when at the limit
+      const T = run.T[i], lim = d.limits && d.limits[S.limit], big = 0.05;
+      if (Math.abs(T) > 1e-4) {
+        const len = 0.04 + 0.14 * Math.min(Math.abs(T), big) / big, sg = Math.sign(T);
+        arrow(stern, [stern[0] + sg * len * ps.ey[0], stern[1] + sg * len * ps.ey[1]], C.warn,
+              lim && Math.abs(T) >= lim * 0.999);
+      }
+    }
+    // buoy: chart-style ringed dot
+    dot(ctx, bx, by, 7, C.paper, C.ink, 2); dot(ctx, bx, by, 2.5, C.ink);
+    if (mini) return;
+    // current arrow and scale bar
+    ctx.strokeStyle = C.ink; ctx.fillStyle = C.ink; ctx.lineWidth = 1.5;
+    const [qx, qy] = P(v.xmax - 0.03, v.ymax - 0.06), [rx] = P(v.xmax - 0.24, 0);
+    ctx.beginPath(); ctx.moveTo(qx, qy); ctx.lineTo(rx, qy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rx, qy); ctx.lineTo(rx + 9, qy - 4.5); ctx.lineTo(rx + 9, qy + 4.5); ctx.closePath(); ctx.fill();
+    ctx.font = SANS; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.fillText("CURRENT", (qx + rx) / 2, qy - 6);
+    const bar = 100 / d.L_m, [sx, sy] = P(v.xmin + 0.04, -v.ymax + 0.05), [sx2] = P(v.xmin + 0.04 + bar, 0);
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx2, sy); ctx.stroke();
+    ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx, sy - 5); ctx.lineTo(sx, sy + 5); ctx.moveTo(sx2, sy - 5); ctx.lineTo(sx2, sy + 5); ctx.stroke();
+    ctx.font = MONO; ctx.textAlign = "left"; ctx.fillText("100 m", sx, sy - 6);
+    if (run.wind) {
+      // wind arrow, top left: points where the wind blows, -(cos beta, sin beta); length grows with the force
+      const wb = run.wind.beta * D2R, len = 0.1 + 0.35 * run.wind.ratio, c0 = [v.xmin + 0.2, v.ymax - 0.2];
+      const [wx, wy] = P(c0[0], c0[1]);
+      ctx.font = SANS; ctx.fillStyle = C.ink; ctx.textAlign = "left"; ctx.textBaseline = "top";
+      if (run.wind.ratio === 0) {
+        ctx.fillText("NO WIND", wx - 30, wy - 6);
+      } else {
+        const dx = -Math.cos(wb) * len / 2, dy = -Math.sin(wb) * len / 2;
+        const [ax0, ay0] = P(c0[0] - dx, c0[1] - dy), [ax1, ay1] = P(c0[0] + dx, c0[1] + dy);
+        const ang = Math.atan2(ay1 - ay0, ax1 - ax0);
+        ctx.strokeStyle = C.ink; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(ax0, ay0); ctx.lineTo(ax1, ay1); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ax1, ay1);
+        ctx.lineTo(ax1 - 11 * Math.cos(ang - 0.4), ay1 - 11 * Math.sin(ang - 0.4));
+        ctx.lineTo(ax1 - 11 * Math.cos(ang + 0.4), ay1 - 11 * Math.sin(ang + 0.4)); ctx.closePath(); ctx.fill();
+        ctx.textBaseline = "bottom"; ctx.textAlign = "center"; ctx.fillText("WIND", wx, P(0, c0[1] + 0.14)[1]);
+      }
+    }
+    if (F < 0) { ctx.fillStyle = C.crit; ctx.font = SANS; ctx.textAlign = "center"; ctx.fillText("bar pushing: a rope would go slack", (ax + bx) / 2, Math.min(ay, by) - 10); }
+    $("r-t").textContent = tstar.toFixed(1);
+    $("r-g").textContent = run.g[i].toFixed(1) + "°";
+    $("r-p").textContent = run.p[i].toFixed(1) + "°";
+    $("r-f").textContent = F.toFixed(2);
+  }
+
+  function drawBif() {
+    const { d, run } = current();
+    const { ctx, w, h } = setupCanvas($("cv-bif"));
+    const k = d.knob;
+    if (d.map) { drawMap(d, run, ctx, w, h); return; }
+    let dg = d.diagrams ? d.diagrams[S.idx2] : d.diagram, xr0 = null, yr0 = null, ref = null;
+    if (d.diagrams) { xr0 = [k.values[0], k.values[k.values.length - 1]]; yr0 = d.yrange_swing; }
+    if (d.wind && S.bifView === "force") { // rest heading against wind force, for the chosen direction: the force
+      dg = d.force_diagrams[S.idx2]; xr0 = d.xrange_force; yr0 = d.yrange_force; // slider moves along it
+    } else if (d.wind) { // rest heading against attachment point, for this wind; the no-wind pitchfork in grey
+      dg = run.diagram; xr0 = d.xrange_xa; yr0 = d.yrange_xa; ref = d.reference;
+    }
+    let xs = [], ys = [];
+    dg.branches.forEach((b) => { xs = xs.concat(b.x); ys = ys.concat(b.y); });
+    const xr = xr0 || [Math.min(...xs), Math.max(...xs)], yr = yr0 || range(ys, 0.12);
+    const ylabel = dg.marker === "swing" ? "hawser angle γ [deg]" : dg.ylabel;
+    const m = axes(ctx, w, h, xr, yr, dg.xlabel, ylabel, { reverseX: !!k.reverse });
+    S.bifMap = { y0: m.y0, ph: m.ph, yr }; // for clicking a branch (wind demo)
+    clipTo(ctx, m);
+    if (ref) { // no wind, thin grey, behind
+      ctx.strokeStyle = C.mute; ctx.lineWidth = 1;
+      ref.branches.forEach((b) => polyline(ctx, b.x, b.y, m.X, m.Y, 0, b.x.length));
+    }
+    dg.branches.forEach((b) => {
+      ctx.strokeStyle = b.cycle ? C.gamma : C.ink; ctx.lineWidth = 2.4;
+      let start = 0;
+      for (let j = 1; j <= b.x.length; j++) {
+        if (j === b.x.length || b.stable[j] !== b.stable[start]) {
+          ctx.setLineDash(b.stable[start] ? [] : [7, 5]);
+          polyline(ctx, b.x, b.y, m.X, m.Y, start, Math.min(j + 1, b.x.length));
+          start = j;
+        }
+      }
+      ctx.setLineDash([]);
+    });
+    dg.points.forEach((p) => {
+      if (p.type === "pitchfork") triangle(ctx, m.X(p.x), m.Y(p.y), 8);
+      else if (p.type === "fold") diamond(ctx, m.X(p.x), m.Y(p.y), 7);
+      else dot(ctx, m.X(p.x), m.Y(p.y), 6.5, C.ink, C.paper, 2);
+    });
+    // you are here: the slider value (or the fixed attachment point of the wind demo), the range covered over the
+    // last ~15 t*, and the ship now
+    const kv = dg.marker_x !== undefined ? dg.marker_x : k.values[S.idx], i = frameIndex(), X = m.X(kv);
+    const series = dg.marker === "heading" ? run.p : run.g;
+    let lo = Infinity, hi = -Infinity;
+    for (let q = Math.max(0, i - 45); q <= i; q++) { lo = Math.min(lo, series[q]); hi = Math.max(hi, series[q]); }
+    ctx.strokeStyle = C.now; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X, m.y0); ctx.lineTo(X, m.y0 + m.ph); ctx.stroke();
+    ctx.globalAlpha = 0.35; ctx.fillStyle = C.now; ctx.fillRect(X - 4, m.Y(hi), 8, Math.max(1, m.Y(lo) - m.Y(hi))); ctx.globalAlpha = 1;
+    ctx.fillStyle = C.now; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+    ctx.fillRect(X - 5.5, m.Y(series[i]) - 5.5, 11, 11); ctx.strokeRect(X - 5.5, m.Y(series[i]) - 5.5, 11, 11);
+    ctx.restore();
+    const shipNow = '<span><span class="dot"></span>ship</span>', rest = '<span><i></i>stable</span><span><i class="dash"></i>unstable</span>';
+    $("bif-key").innerHTML = d.wind && S.bifView === "force"
+      ? rest + "<span>◇ fold</span>" + shipNow + "<span>wind from " + d.knob2.values[S.idx2] + "°</span>"
+      : d.wind
+      ? rest + '<span>◇ fold</span><span><span class="tri">▲</span>pitchfork</span><span><i style="border-top-color:var(--mute);border-top-width:1px"></i>no wind</span>' + shipNow
+      : dg.marker === "heading"
+      ? rest + '<span><span class="tri">▲</span>pitchfork</span>' + shipNow
+      : rest + '<span><i class="blue"></i>limit cycle</span><span>● Hopf</span>' + shipNow;
+  }
+
+  // Thruster tab: instead of a 1-D diagram, the map of the two gains (k_d across, k_p up). Colour = decay rate
+  // sigma = -max Re(lambda) of the straight position (Python, E08): red tint where it fishtails (sigma < 0), blue,
+  // darker = faster decay, where it settles. Black line: Hopf (sigma = 0); dashed: the margin sigma = sigma_min;
+  // ★ least thrust with the margin. × = slider positions where, with the chosen thrust limit, the full fishtail
+  // survives although the straight position is stable (the thruster is too weak for the big swing).
+  function drawMap(d, run, ctx, w, h) {
+    const M = d.map, kd = M.kd, kp = M.kp, smax = Math.max(...M.sigma.flat());
+    const m = axes(ctx, w, h, [kd[0], kd[kd.length - 1]], [kp[0], kp[kp.length - 1]], "damping gain k_d", "spring gain k_p");
+    S.bifMap = { m, xr: [kd[0], kd[kd.length - 1]], yr: [kp[0], kp[kp.length - 1]] };
+    clipTo(ctx, m);
+    const dx = (m.X(kd[1]) - m.X(kd[0])), dy = (m.Y(kp[0]) - m.Y(kp[1]));
+    M.sigma.forEach((row, a) => row.forEach((s, b) => {
+      ctx.fillStyle = s < 0 ? "rgba(208,59,59,0.22)" : "rgba(42,120,214," + (0.08 + 0.62 * s / smax).toFixed(3) + ")";
+      ctx.fillRect(m.X(kd[b]) - dx / 2, m.Y(kp[a]) - dy / 2, dx + 0.6, dy + 0.6);
+    }));
+    const line = (pieces, dash, lw) => {
+      ctx.strokeStyle = C.ink; ctx.lineWidth = lw; ctx.setLineDash(dash);
+      pieces.forEach(([xs, ys]) => polyline(ctx, xs, ys, m.X, m.Y, 0, xs.length));
+      ctx.setLineDash([]);
+    };
+    line(M.hopf, [], 2.4); line(M.margin, [6, 4], 1.4);
+    // where the big swing survives with this thrust limit
+    const k1 = d.knob.values, k2 = d.knob2.values, runs = runSet(d), n2 = k2.length;
+    ctx.strokeStyle = C.crit; ctx.lineWidth = 1.6;
+    runs.forEach((r, si) => {
+      if (r.status !== "fishtails" || !d.settings[si].equilibria[0].stable) return;
+      const x = m.X(k1[Math.floor(si / n2)]), y = m.Y(k2[si % n2]);
+      ctx.beginPath(); ctx.moveTo(x - 3.5, y - 3.5); ctx.lineTo(x + 3.5, y + 3.5); ctx.moveTo(x + 3.5, y - 3.5); ctx.lineTo(x - 3.5, y + 3.5); ctx.stroke();
+    });
+    // ★ and the ship's gains now
+    ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = C.paper; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2;
+    ctx.strokeText("★", m.X(M.star.k_d), m.Y(M.star.k_p)); ctx.fillText("★", m.X(M.star.k_d), m.Y(M.star.k_p));
+    const X = m.X(k1[S.idx]), Y = m.Y(k2[S.idx2]);
+    ctx.fillStyle = C.now; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+    ctx.fillRect(X - 5.5, Y - 5.5, 11, 11); ctx.strokeRect(X - 5.5, Y - 5.5, 11, 11);
+    ctx.restore();
+    $("bif-key").innerHTML = '<span><span class="sw" style="background:rgba(208,59,59,0.3)"></span>fishtails</span>' +
+      '<span><span class="sw" style="background:rgba(42,120,214,0.6)"></span>settles (darker = faster)</span>' +
+      "<span><i></i>Hopf σ = 0</span><span><i class=\"dash\"></i>σ = " + M.sigma_min + "</span><span>★ least thrust</span>" +
+      '<span style="color:var(--crit)">× big swing survives</span><span><span class="dot"></span>gains now</span>';
+  }
+
+  function phaseData(run) {
+    if (S.proj === "psi") return { x: run.p, y: run.pd, xl: "heading ψ [deg]", yl: "dψ/dt* [deg per L/U]", eq: (e) => [e.p, 0] };
+    if (S.proj === "gamma") return { x: run.g, y: run.gd, xl: "hawser angle γ [deg]", yl: "dγ/dt* [deg per L/U]", eq: (e) => [e.g, 0] };
+    return { x: run.g, y: run.p, xl: "hawser angle γ [deg]", yl: "heading ψ [deg]", eq: (e) => [e.g, e.p] };
+  }
+  function drawPhase() {
+    const { run } = current();
+    const { ctx, w, h } = setupCanvas($("cv-phase"));
+    const pd = phaseData(run), i = frameIndex(), n = pd.x.length;
+    const eqs = run.equilibria.map(pd.eq);
+    const m = axes(ctx, w, h, range(pd.x.concat(eqs.map((e) => e[0]))), range(pd.y.concat(eqs.map((e) => e[1]))), pd.xl, pd.yl);
+    clipTo(ctx, m);
+    ctx.strokeStyle = C.hair; ctx.lineWidth = 1.2; polyline(ctx, pd.x, pd.y, m.X, m.Y, i, n);
+    ctx.strokeStyle = C.gamma; ctx.lineWidth = 1.6; polyline(ctx, pd.x, pd.y, m.X, m.Y, 0, i + 1);
+    run.equilibria.forEach((e, k) => dot(ctx, m.X(eqs[k][0]), m.Y(eqs[k][1]), 5, e.stable ? C.ink : C.paper, C.ink, 1.6));
+    ctx.fillStyle = C.now; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+    ctx.fillRect(m.X(pd.x[i]) - 5, m.Y(pd.y[i]) - 5, 10, 10); ctx.strokeRect(m.X(pd.x[i]) - 5, m.Y(pd.y[i]) - 5, 10, 10);
+    ctx.restore();
+  }
+
+  // ---------- eigenvalues ----------
+  // Every rest position has one FAST real eigenvalue (always below -1.7 U/L here: that disturbance is gone within
+  // half a t*) and three slow ones that decide stability. Only the slow ones are drawn; the fast one is listed in the
+  // table under the plot, so it does not squeeze the interesting part of the plot into a corner.
+  const FAST = -1;
+  const MINUS = (v) => (v < 0 ? "−" : "+") + Math.abs(v).toFixed(3);
+  function eigText([re, im]) { return im === 0 ? MINUS(re) : MINUS(re) + " ± " + Math.abs(im).toFixed(3) + "i"; }
+  function lead(eig) { return eig.reduce((a, e) => (e[0] > a[0] + 1e-9 || (Math.abs(e[0] - a[0]) <= 1e-9 && e[1] > a[1]) ? e : a)); }
+  // Axes: the grey trail (same rest position at every slider value) always fits, so the points visibly move along it
+  // as the slider moves; the axes only grow if the points of this slider value lie outside it (the angled positions
+  // of the Pitchfork tab far aft). Room is left right of the zero line.
+  function eigAxes(eqs) {
+    let lo = 0, hi = 0, im = 0.4;
+    eqs.forEach((e) => e.eig.forEach(([re, i]) => {
+      if (re < FAST) return;
+      lo = Math.min(lo, re); hi = Math.max(hi, re); im = Math.max(im, Math.abs(i));
+    }));
+    const span = hi - lo;
+    return { xr: [lo - 0.08 * span, hi + Math.max(0.1 * span, 0.25 * (-lo))], yr: [-im * 1.18, im * 1.18] };
+  }
+  // The rest positions to show, each with a name and a marker. Shape/colour = which rest position;
+  // filled = that rest position is stable, open = unstable.
+  // Mirror-image rest positions (port and starboard with no sideways wind) have the same eigenvalues: one row.
+  function eigGroups(d, run) {
+    const same = (a, b) => JSON.stringify(a.eig) === JSON.stringify(b.eig);
+    const out = [];
+    run.equilibria.forEach((e) => {
+      const straight = !d.wind && Math.abs(e.g) < 1e-6;
+      const g = d.wind ? { eq: e, color: e.stable ? C.psi : C.crit, shape: "square", name: e.stable ? (e.side > 0 ? "port" : "starboard") : "middle" }
+                       : straight ? { eq: e, color: C.gamma, shape: "circle", name: "straight" }
+                       : { eq: e, color: C.psi, shape: "square", name: "angled" };
+      const twin = out.find((o) => o.eq.stable && e.stable && o.shape === g.shape && same(o.eq, e));
+      if (twin) twin.name = d.wind ? "port = stbd" : "angled ×2"; else out.push(g);
+    });
+    return out;
+  }
+  function eigMark(ctx, x, y, g, r) {
+    ctx.beginPath();
+    if (g.shape === "circle") ctx.arc(x, y, r, 0, 2 * Math.PI); else ctx.rect(x - r, y - r, 2 * r, 2 * r);
+    ctx.fillStyle = g.eq.stable ? g.color : C.paper; ctx.fill();
+    ctx.strokeStyle = g.color; ctx.lineWidth = 2; ctx.stroke();
+  }
+  function drawEig() {
+    const { d, run } = current();
+    const { ctx, w, h } = setupCanvas($("cv-eig"));
+    const groups = eigGroups(d, run);
+    // grey: the same rest positions at the other slider values (wind: the other forces from this direction)
+    const trail = d.wind || d.grid ? d.settings.filter((_, s) => s % d.knob2.values.length === S.idx2).flatMap((r) => r.equilibria)
+                         : d.runs.map((r) => r.equilibria[0]);
+    const ax = eigAxes(trail.concat(groups.map((g) => g.eq)));
+    const m = axes(ctx, w, h, ax.xr, ax.yr, "Re λ [U/L]", "Im λ [U/L]", { nx: 5 });
+    // the zero line: right of it (the right half-plane, RHP) a disturbance grows
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(m.X(0), m.y0); ctx.lineTo(m.X(0), m.y0 + m.ph); ctx.stroke();
+    ctx.font = SANS; ctx.fillStyle = C["ink-2"]; ctx.textBaseline = "top"; ctx.textAlign = "left";
+    ctx.fillText("RHP: grows", m.X(0) + 6, m.y0 + 4);
+    clipTo(ctx, m);
+    ctx.fillStyle = C.streak;
+    trail.forEach((e) => e.eig.forEach(([re, im]) => { if (re >= FAST) ctx.fillRect(m.X(re) - 1.5, m.Y(im) - 1.5, 3, 3); }));
+    // where the eigenvalues cross at the bifurcation point (Python: eigenvalues exactly at the critical value)
+    const cr = d.crossings ? d.crossings[S.idx2] : d.crossing;
+    if (cr) {
+      cr.eig.filter(([re]) => Math.abs(re) < 1e-3).forEach(([, im]) => {
+        if (cr.type === "pitchfork") triangle(ctx, m.X(0), m.Y(0), 7);
+        else dot(ctx, m.X(0), m.Y(im), 5.5, C.ink, C.paper, 2);
+      });
+    }
+    // the eigenvalues now
+    groups.forEach((g) => g.eq.eig.forEach(([re, im]) => { if (re >= FAST) eigMark(ctx, m.X(re), m.Y(im), g, g.shape === "circle" ? 5.5 : 5); }));
+    // label the eigenvalue closest to (or furthest past) the line: it decides stability
+    const top = groups.map((g) => lead(g.eq.eig)).reduce((a, e) => (e[0] > a[0] ? e : a));
+    ctx.font = MONO; ctx.fillStyle = C.ink; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    ctx.fillText(eigText(top), Math.min(m.X(top[0]) + 9, m.x0 + m.pw - ctx.measureText(eigText(top)).width - 4), m.Y(Math.abs(top[1])) - 7);
+    ctx.restore();
+    eigTable(d, groups);
+  }
+  // The table and the verdict in words, under the plot (only rewritten when it changes).
+  function eigTable(d, groups) {
+    const fmtRow = (g) => {
+      const slow = g.eq.eig.filter(([re, im]) => re >= FAST && im >= 0).sort((a, b) => b[0] - a[0]);
+      const fast = g.eq.eig.filter(([re]) => re < FAST);
+      const mk = '<span class="mk" style="border-color:' + g.color + ";background:" + (g.eq.stable ? g.color : C.paper) +
+        (g.shape === "circle" ? ";border-radius:50%" : "") + '"></span>';
+      return "<tr><td>" + mk + g.name + "</td><td>" + slow.map((e) => (e[0] > 0 ? '<b style="color:var(--crit)">' + eigText(e) + "</b>" : eigText(e))).join("<br>") +
+        "</td><td>" + fast.map(eigText).join(" ") + '</td><td class="' + (g.eq.stable ? "" : "up") + '">' + (g.eq.stable ? "stable" : "unstable") + "</td></tr>";
+    };
+    let html = '<table><tr><th>rest</th><th>λ (plotted)</th><th>fast λ</th><th></th></tr>' + groups.map(fmtRow).join("") + "</table>";
+    html += '<p class="verdict">' + eigVerdict(d, groups) + "</p>";
+    if (html !== S.eigHtml) { $("eig-read").innerHTML = html; S.eigHtml = html; }
+  }
+  // One short line; the longer explanation is in "How to read it".
+  function eigVerdict(d, groups) {
+    if (d.wind) {
+      const mid = groups.find((g) => !g.eq.stable);
+      return mid ? "<b>Middle unstable:</b> a real λ is in the RHP (a saddle)." : "<b>One rest position left</b> (past the fold ◇).";
+    }
+    const top = lead(groups[0].eq.eig);
+    if (top[0] < 0 && d.grid) {
+      const sig = (-top[0]).toFixed(3), run = current().run;
+      return "<b>Straight stable:</b> all λ in the left half-plane (decay rate σ = " + sig + " U/L)." +
+        (run.status === "fishtails" ? " <b>But the big swing survives:</b> the " + (d.thruster ? "thruster is at its limit" : "control is too weak") + " (nonlinear, not seen by λ)." : "");
+    }
+    if (top[0] < 0) return "<b>Straight stable:</b> all λ in the left half-plane.";
+    return top[1] === 0 ? "<b>Straight unstable:</b> a real λ crossed into the RHP → pitchfork ▲."
+                        : "<b>Straight unstable:</b> a complex pair crossed into the RHP → Hopf ●, fishtailing.";
+  }
+
+  function drawTime() {
+    const { run } = current();
+    const { ctx, w, h } = setupCanvas($("cv-time"));
+    const n = run.g.length, tt = Array.from({ length: n }, (_, j) => j * run.dt), i = frameIndex();
+    const top = Math.round(h * 0.6);
+    const m1 = axes(ctx, w, top, [0, tt[n - 1]], range(run.g.concat(run.p), 0.06), "", "angle [deg]", { ny: 4 });
+    clipTo(ctx, m1);
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = C.gamma; polyline(ctx, tt, run.g, m1.X, m1.Y, 0, n);
+    ctx.strokeStyle = C.psi; polyline(ctx, tt, run.p, m1.X, m1.Y, 0, n);
+    ctx.restore();
+    ctx.save(); ctx.translate(0, top);
+    // bottom: hawser force; thruster tab also the thruster force Y_T/F_H0 (amber, dotted lines = the thrust limit)
+    const lim = run.T && ALL[S.demo].limits[S.limit];
+    const lowVals = run.F.concat([0, 1], run.T ? run.T : [], lim ? [lim, -lim] : []);
+    const m2 = axes(ctx, w, h - top, [0, tt[n - 1]], range(lowVals, 0.06), "time t*", run.T ? "force / F_H0" : "F_H/F_H0", { ny: 3 });
+    clipTo(ctx, m2);
+    ctx.strokeStyle = C.mute; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+    ctx.beginPath(); ctx.moveTo(m2.x0, m2.Y(1)); ctx.lineTo(m2.x0 + m2.pw, m2.Y(1)); ctx.stroke();
+    if (lim) [lim, -lim].forEach((v) => { ctx.strokeStyle = C.warn; ctx.beginPath(); ctx.moveTo(m2.x0, m2.Y(v)); ctx.lineTo(m2.x0 + m2.pw, m2.Y(v)); ctx.stroke(); });
+    ctx.setLineDash([]);
+    ctx.strokeStyle = C.force; ctx.lineWidth = 1.4; polyline(ctx, tt, run.F, m2.X, m2.Y, 0, n);
+    if (run.T) { ctx.strokeStyle = C.warn; ctx.lineWidth = 1.4; polyline(ctx, tt, run.T, m2.X, m2.Y, 0, n); }
+    ctx.restore(); ctx.restore();
+    const x = m1.X(tt[i]);
+    ctx.strokeStyle = C.now; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, m1.y0); ctx.lineTo(x, h - 38); ctx.stroke();
+  }
+
+  function drawAll() {
+    drawTop($("cv-top"), false); drawBif(); drawPhase(); drawEig(); drawTime();
+    if (!$("mini").hidden) { // floating mini view of the ship (shown while the big top view is scrolled away)
+      const run = current().run, i = frameIndex();
+      drawTop($("cv-mini"), true);
+      $("mini-read").textContent = "t* " + (i * run.dt).toFixed(1) + "  γ " + run.g[i].toFixed(1) + "°  ψ " + run.p[i].toFixed(1) + "°  · " + run.status;
+    }
+    const tk = !!current().run.T;
+    if ($("time-key").dataset.t !== String(tk)) {
+      $("time-key").dataset.t = String(tk);
+      $("time-key").innerHTML = '<span><i class="blue"></i>γ</span><span><i class="green"></i>ψ</span><span><i class="violet"></i>F<sub>H</sub>/F<sub>H0</sub></span>' +
+        (tk ? '<span><i class="amber"></i>thruster Y<sub>T</sub>/F<sub>H0</sub></span>' : "");
+    }
+    const n = current().run.g.length; // a few wind runs are longer (slow swing across, see build_demos.transition_run)
+    $("scrub").max = String(n - 1); $("t-end").textContent = String(Math.round((n - 1) * current().run.dt));
+    $("scrub").value = String(frameIndex());
+  }
+
+  // ---------- text ----------
+  function knobText() {
+    const { d, run } = current(), k = d.knob, v = k.values[S.idx];
+    $("knob-name").innerHTML = pretty(k.label) + ' · <span class="sym">' + pretty(k.symbol) + "</span>";
+    $("knob-val").textContent = v.toFixed(k.digits);
+    let unit = "";
+    if (k.key === "x_A_L") unit = Math.round(v * d.L_m) + " m forward of midship";
+    if (k.key === "L_H_L") unit = Math.round(v * d.L_m) + " m of hawser";
+    if (k.key === "C_F") unit = run.U_model ? "≈ 1:90 model at " + run.U_model.toFixed(2) + " m/s" : (run.U_full ? "≈ real ship at " + run.U_full.toFixed(2) + " m/s" : "");
+    if (k.key === "wind_ratio") unit = v === 0 ? "no wind" : "× hawser tension without wind";
+    if (k.key === "tug_ratio") unit = v === 0 ? "no tug" : forceWords(v, d.F_H0_N[S.idx2]);
+    if (k.key === "k_d") unit = "★ least thrust: k_d " + d.map.star.k_d + ", k_p " + d.map.star.k_p;
+    $("knob-unit").textContent = unit;
+    $("timescale").textContent = timeScale(d, run);
+    $("status").dataset.s = run.status;
+    $("status-text").textContent = run.status;
+    updatePlaceButtons();
+    if (d.knob2) {
+      const k2 = d.knob2, b = k2.values[S.idx2];
+      $("knob2-name").innerHTML = pretty(k2.label) + ' · <span class="sym">' + pretty(k2.symbol) + "</span>";
+      if (d.wind) {
+        $("knob2-val").textContent = (b > 0 ? "+" : "") + b + "°";
+        $("knob2-unit").textContent = windWords(b);
+      } else {
+        $("knob2-val").textContent = b.toFixed(k2.digits);
+        $("knob2-unit").textContent = k2.key === "C_F" ? (run.U_full ? "≈ real ship at " + run.U_full.toFixed(2) + " m/s" : run.U_model ? "≈ 1:90 model at " + run.U_model.toFixed(2) + " m/s" : "")
+          : "";
+      }
+    }
+    if (d.thruster) {
+      const lim = d.limits[S.limit];
+      $("lim-hint").textContent = (lim ? "limit " + forceWords(lim, d.F_H0_N) + " · " : "") + "PLACEHOLDER sizes · click the map to pick gains";
+      [0, 1, 2].forEach((q) => $("lim-" + q).setAttribute("aria-pressed", String(q === S.limit)));
+    }
+    if (d.wind) {
+      const n = run.equilibria.length, ns = run.equilibria.filter((e) => e.stable).length;
+      const fr = d.fold_ratio[S.idx2];
+      $("linear").textContent = "At x_A/L = " + d.fixed.x_A_L + " this wind leaves " + n + " rest position" + (n > 1 ? "s" : "") + ", " + ns + " of them stable. " +
+        (fr === null ? "Wind along the current has no sideways part: the pitchfork stays perfect and both sides stay possible." :
+          "For wind from this direction, the far side disappears above " + fr.toFixed(3) + " F_H0 (the fold).");
+    } else {
+      const g0 = run.equilibria[0].eig.reduce((a, e) => Math.max(a, e[0]), -Infinity);
+      $("linear").textContent = "Linear analysis of the straight position at this slider value: largest growth rate " + (g0 >= 0 ? "+" : "") + g0.toFixed(3) + " U/L, so it is " + (g0 < 0 ? "stable." : "unstable.");
+    }
+    const fx = d.fixed, parts = [], k2key = d.knob2 ? d.knob2.key : null;
+    if (k.key !== "x_A_L") parts.push("x_A/L = " + fx.x_A_L);
+    if (k.key !== "L_H_L") parts.push("L_H/L = " + fx.L_H_L);
+    if (k.key !== "C_F" && k2key !== "C_F") parts.push("C_F = " + fx.C_F);
+    $("story").innerHTML = pretty(d.story + " Held fixed: " + parts.join(", ") + ".");
+    let extra = "";
+    if (k.key === "C_F") extra = " Slider right = less friction = faster current.";
+    if (d.knob2) extra += " " + d.knob2.help;
+    $("knob-help").innerHTML = pretty(k.help + extra);
+  }
+  // What one unit of t* is in real time, t = t* L / U, for the 1:90 tank model and for the real ship at the current
+  // speed that gives this C_F (speeds from Python: per run in the Fishtailing tab, per tab otherwise).
+  function duration(s) { return s < 90 ? s.toFixed(0) + " s" : s < 5400 ? (s / 60).toFixed(1) + " min" : (s / 3600).toFixed(1) + " h"; }
+  function timeScale(d, run) {
+    const um = "U_model" in run ? run.U_model : d.U_model, uf = "U_full" in run ? run.U_full : d.U_full, parts = [];
+    if (um) parts.push(duration(d.L_m / d.model_scale / um) + " model");
+    if (uf) parts.push(duration(d.L_m / uf) + " ship");
+    return parts.length ? "1 t* = " + parts.join(" · ") : "";
+  }
+  // A force given as a fraction of F_H0, in newtons for the 1:90 tank model and kN for the real ship (each only
+  // where a current speed gives this friction coefficient; F_H0 [N] from Python).
+  function forceWords(ratio, F) {
+    const parts = [];
+    if (F.model) parts.push((ratio * F.model).toFixed(ratio * F.model < 1 ? 3 : 2) + " N model");
+    if (F.ship) parts.push((ratio * F.ship / 1e3).toFixed(0) + " kN ship");
+    return parts.length ? "= " + parts.join(" · ") : "";
+  }
+  function windWords(b) {
+    const a = Math.abs(b), side = b > 0 ? "port" : "starboard";
+    if (a === 0) return "from ahead, with the current";
+    if (a === 180) return "from astern, against the current";
+    if (a === 90) return "from " + side + ", across the current";
+    return (a < 90 ? "from the " + side + " bow" : "from the " + side + " quarter");
+  }
+
+  // How to read the bifurcation diagram of this tab (About section).
+  function bifHelp(d) {
+    const tail = " The orange line is the slider; the orange square is the ship now, and the band behind it is the range it covered over the last ~15 t*.";
+    if (d.map) return "<b>Gain map</b> (instead of a bifurcation diagram, because there are two gains). Across: the damping gain k<sub>d</sub>; up: the spring gain k<sub>p</sub>. The colour is the decay rate σ = −max Re λ of the straight position: red where it is negative (a small swing grows: fishtailing), blue where it is positive, darker = a small swing dies out faster. The solid black line is the Hopf boundary (σ = 0): crossing it, the complex pair of eigenvalues crosses into or out of the right half-plane. The dashed line is the margin σ = " + d.map.sigma_min + " (PROPOSED); ★ is the pair of gains that needs the least thrust while meeting it (computed in E08, without a thrust limit). σ can never exceed about 0.22 U/L: one eigenvalue belongs to a slow sideways drift that a heading controller cannot reach. The colours come from the eigenvalues, so they do not depend on the thrust limit. The red × marks do: they are the gains where, with the chosen limit, the full fishtail survives even though the straight position is stable, because the thruster is at its limit during the big swing (the eigenvalues only describe small swings). Same gains, different start, different end: bistability. Click the map to jump to those gains; the orange square is the gains now.";
+    if (d.diagrams) return "<b>Bifurcation diagram.</b> Across: the first slider, the tug pull F<sub>tug</sub>/F<sub>H0</sub>, for the friction set by the second slider. Up: the hawser angle γ. Black line at γ = 0: the straight position, solid where stable, dashed where unstable. Blue lines: the limit cycle (± the swing amplitude of the fully grown fishtail). ● Hopf point: above this pull the swing dies out. A faster current (smaller C<sub>F</sub>) needs a stronger tug; at real-ship friction (C<sub>F</sub> ≈ 0.01) more than twice F<sub>H0</sub>." + tail;
+    if (d.wind) return "<b>Bifurcation diagram.</b> Two views (menu above the diagram). <i>ψ vs wind force</i>: across, the force F<sub>w</sub>/F<sub>H0</sub> (the first slider moves you along it); up, the heading ψ at which the ship can rest. <i>ψ vs attachment point</i>: like the Pitchfork tab, for this wind; the thin grey lines are the no-wind pitchfork. Every line is a rest position, so all are black: solid = stable, dashed = unstable. ◇ fold: a stable branch and the unstable middle meet and both end." + tail;
+    if (d.diagram.marker === "heading") return "<b>Bifurcation diagram.</b> Across: the slider, the attachment point x<sub>A</sub>/L (0 = midship, 0.5 = bow). Up: the heading ψ at which the ship can <i>rest</i> (0 = bow straight into the current, positive = bow to port). Every line is a rest position (an equilibrium), so all lines are black: solid = stable, dashed = unstable. At ▲ (the pitchfork) the straight position ψ = 0 turns unstable and two mirror-image angled positions branch off, one to port and one to starboard." + tail;
+    const knob = d.knob.key === "C_F" ? "the friction coefficient C<sub>F</sub>, drawn reversed so that right = less friction = faster current"
+                                      : "the hawser length L<sub>H</sub>/L";
+    return "<b>Bifurcation diagram.</b> Across: the slider, " + knob + ". Up: the hawser angle γ (0 = hawser along the current). The <b>black</b> line at γ = 0 is the straight rest position, solid where stable and dashed where unstable. The <b>blue</b> lines are <i>not</i> rest positions: they are the limit cycle. Once the fishtailing has fully grown, γ swings back and forth between the upper and the lower blue line (+ and − the swing amplitude). ● Hopf point: the swing is born there with zero size and grows as you move past it. This diagram uses γ rather than ψ because the sideways swing of the whole ship about the buoy is what fishtailing looks like (the Pitchfork tab uses ψ because its angled rest positions differ most in heading)." + tail;
+  }
+
+  // ---------- wiring ----------
+  function sliderToIdx(val) { const k = ALL[S.demo].knob; return k.reverse ? k.values.length - 1 - val : val; }
+  function idxToSlider(idx) { const k = ALL[S.demo].knob; return k.reverse ? k.values.length - 1 - idx : idx; }
+
+  function placeCrit(d) {
+    // mark the bifurcation value on the slider track (interpolated between slider positions)
+    const k = d.knob, vals = k.values, n = vals.length, el = $("crit");
+    const crit = d.wind ? d.fold_ratio[S.idx2] : d.hopfs ? d.hopfs[S.idx2] : d.map ? undefined : d.x_Tcr !== undefined ? d.x_Tcr : d.hopf;
+    if (crit === null || crit > vals[n - 1]) { el.hidden = true; return; }
+    if (crit === undefined) { el.hidden = true; return; }
+    let f = 0;
+    for (let j = 0; j < n - 1; j++) if ((crit - vals[j]) * (crit - vals[j + 1]) <= 0) f = j + (crit - vals[j]) / (vals[j + 1] - vals[j]);
+    const pos = (k.reverse ? n - 1 - f : f) / (n - 1);
+    const kn = $("knob"), thumb = 12;
+    el.style.left = "calc(" + thumb / 2 + "px + " + pos + " * (100% - " + thumb + "px))";
+    el.hidden = false;
+    el.innerHTML = pretty((d.wind ? "◇ fold " : d.x_Tcr !== undefined ? "▲ pitchfork " : "● Hopf ") + crit.toFixed(d.wind ? 3 : k.digits));
+  }
+
+  function selectDemo(id) {
+    S.demo = id;
+    const d = ALL[id];
+    ORDER.forEach((o) => { $("tab-" + o).setAttribute("aria-pressed", String(o === id)); $("tab-" + o).disabled = !ALL[o]; });
+    if (!d) { $("missing").hidden = false; return; }
+    $("missing").hidden = true;
+    if ((d.trans || d.grid) && !d.prepared) { // these runs share one mooring geometry; add it once for drawing
+      const sets = [d.runs].concat(d.thruster ? [1, 2].map((q) => (EXTRA.thruster || {})["limit" + q]).filter(Boolean) : []);
+      sets.forEach((rs) => rs.forEach((r) => { r.x_A_L = d.fixed.x_A_L; r.L_H_L = d.fixed.L_H_L; }));
+      d.prepared = true;
+    }
+    if (d.thruster && !(EXTRA.thruster && EXTRA.thruster.limit1 && EXTRA.thruster.limit2)) S.limit = 0;
+    if (!VIEW[id]) VIEW[id] = computeView(d);
+    const k = d.knob, n = k.values.length;
+    const kn = $("knob"); kn.max = String(n - 1);
+    S.idx = k.default;
+    kn.value = String(idxToSlider(S.idx));
+    kn.setAttribute("aria-label", k.label);
+    const lo = k.values[k.reverse ? n - 1 : 0], hi = k.values[k.reverse ? 0 : n - 1];
+    $("end-lo").textContent = lo.toFixed(k.digits) + (k.reverse ? "  more friction" : "");
+    $("end-hi").textContent = (k.reverse ? "faster current  " : "") + hi.toFixed(k.digits);
+    $("scrub").max = String((d.n_frames || d.runs[0].g.length) - 1);
+    $("t-end").textContent = String(d.T_end);
+    // second knob (wind demo only)
+    const two = !!d.knob2;
+    document.querySelector(".sheet").classList.toggle("two", two);
+    $("readout2").hidden = !two; $("slider2").hidden = !two;
+    if (two) {
+      const k2 = d.knob2, n2 = k2.values.length, kn2 = $("knob2");
+      kn2.max = String(n2 - 1); S.idx2 = k2.default; kn2.value = String(S.idx2);
+      kn2.setAttribute("aria-label", k2.label);
+      if (d.wind) {
+        $("end2-lo").textContent = k2.values[0] + "°  starboard";
+        $("end2-hi").textContent = "port  " + k2.values[n2 - 1] + "°";
+        $("end-lo").textContent = "no wind";
+      } else {
+        $("end2-lo").textContent = k2.values[0].toFixed(k2.digits) + (k2.key === "C_F" ? "  faster current" : "");
+        $("end2-hi").textContent = (k2.key === "C_F" ? "more friction  " : "") + k2.values[n2 - 1].toFixed(k2.digits);
+      }
+    }
+    $("limitbar").hidden = !d.thruster;
+    // "put the ship on" bar: wind (keeps history) and pitchfork (choose the nudge or an angled rest position)
+    const place = !!(d.trans || d.runs_stbd);
+    $("bifview").hidden = !d.wind; $("reset").hidden = !d.trans; $("placebar").hidden = !place;
+    document.querySelector(".sheet").classList.toggle("placed", place || !!d.thruster);
+    S.gridRun = null;
+    ["put-port", "put-stbd", "put-mid-port", "put-mid-stbd"].forEach((b) => $(b).removeAttribute("aria-pressed"));
+    const pf = !!d.runs_stbd;
+    $("place-label").textContent = pf ? "Start the ship" : "Put the ship on";
+    $("put-mid-port").textContent = pf ? "Straight, nudge → port" : "Unstable middle, nudge → port";
+    $("put-mid-stbd").textContent = pf ? "Straight, nudge → starboard" : "Unstable middle, nudge → starboard";
+    $("put-port").textContent = pf ? "At rest, port branch" : "Port branch";
+    $("put-stbd").textContent = pf ? "At rest, starboard branch" : "Starboard branch";
+    $("place-hint").textContent = "or click a branch in the diagram";
+    S.start = { kind: "nudge", side: 1 };
+    if (d.trans) resetWind();
+    const mk = (color, filled, round) => '<span class="dot" style="background:' + (filled ? color : "var(--paper)") +
+      ";box-shadow:inset 0 0 0 2px " + color + (round ? ";border-radius:50%" : "") + '"></span>';
+    $("eig-key").innerHTML = d.wind
+      ? "<span>" + mk("var(--psi)", true) + "stable</span><span>" + mk("var(--crit)", false) + "unstable</span><span>grey: other forces</span>"
+      : "<span>" + mk("var(--gamma)", true, true) + "straight</span>" + (d.runs_stbd ? "<span>" + mk("var(--psi)", true) + "angled</span>" : "") + "<span>open = unstable</span><span>grey: other slider values</span>" +
+        (d.crossings ? "<span>● crossing</span>" : !d.crossing ? "" : "<span>" + (d.crossing.type === "pitchfork" ? "▲" : "●") + " crossing</span>");
+    $("bif-help").innerHTML = bifHelp(d);
+    $("control-help").hidden = !d.grid;
+    S.eigHtml = "";
+    S.frame = 0;
+    try { localStorage.setItem("fishtail-demo", id); } catch (e) { /* storage may be blocked */ }
+    placeCrit(d); knobText(); drawAll();
+  }
+
+  function setPlaying(p) { S.playing = p; $("play").textContent = p ? "Pause" : "Play"; S.last = null; }
+
+  function tick(ts) {
+    if (S.playing && ALL[S.demo]) {
+      if (S.last !== null) {
+        const sec = (ts - S.last) / 1000, run = current().run;
+        S.frame += sec * TSTAR_PER_SEC * S.speed / run.dt;
+        S.flow += sec * FLOW_SPEED;
+        const end = run.g.length - 1;
+        if (S.frame >= end) S.frame = ALL[S.demo].trans ? end : 0; // wind: hold the settled ship; others: loop
+      }
+      S.last = ts;
+      drawAll();
+    }
+    requestAnimationFrame(tick);
+  }
+
+  ORDER.forEach((o) => $("tab-" + o).addEventListener("click", () => selectDemo(o)));
+  $("knob").addEventListener("input", (e) => {
+    const v = sliderToIdx(Number(e.target.value));
+    if (ALL[S.demo].trans) moveWind(v, S.idx2); else S.idx = v;
+    S.frame = 0; knobText(); drawAll();
+  });
+  $("knob2").addEventListener("input", (e) => {
+    if (ALL[S.demo].trans) moveWind(S.idx, Number(e.target.value)); else { S.idx2 = Number(e.target.value); S.frame = 0; }
+    placeCrit(ALL[S.demo]); knobText(); drawAll();
+  });
+  // thruster tab: thrust-limit switch, and click the gain map to pick the nearest slider positions
+  [0, 1, 2].forEach((q) => $("lim-" + q).addEventListener("click", () => {
+    if (q > 0 && !(EXTRA.thruster && EXTRA.thruster["limit" + q])) return;
+    S.limit = q; S.frame = 0; knobText(); drawAll();
+  }));
+  $("reset").addEventListener("click", () => { resetWind(); placeCrit(ALL[S.demo]); knobText(); drawAll(); });
+  const put = (fn, side) => () => { fn(side); knobText(); drawAll(); };
+  $("put-port").addEventListener("click", put(putOnSide, 1));
+  $("put-stbd").addEventListener("click", put(putOnSide, -1));
+  $("put-mid-port").addEventListener("click", put(putOnMiddle, 1));
+  $("put-mid-stbd").addEventListener("click", put(putOnMiddle, -1));
+  // Click a branch in the diagram (wind and pitchfork tabs): the rest position at this slider value nearest to the
+  // clicked heading. Wind: a stable one, the ship is put there; the unstable middle, the ship is nudged towards the
+  // side clicked. Pitchfork: an angled one, the ship rests there; the straight one, it is nudged towards the side clicked.
+  $("cv-bif").addEventListener("click", (e) => {
+    const d = ALL[S.demo];
+    if (d && d.map && S.bifMap) {
+      const r = e.target.getBoundingClientRect(), M = S.bifMap, m = M.m;
+      const kd = M.xr[0] + (e.clientX - r.left - m.x0) / m.pw * (M.xr[1] - M.xr[0]);
+      const kp = M.yr[1] - (e.clientY - r.top - m.y0) / m.ph * (M.yr[1] - M.yr[0]);
+      const near = (vals, v) => vals.reduce((a, x, q) => (Math.abs(x - v) < Math.abs(vals[a] - v) ? q : a), 0);
+      S.idx = near(d.knob.values, kd); S.idx2 = near(d.knob2.values, kp); S.frame = 0;
+      $("knob").value = String(idxToSlider(S.idx)); $("knob2").value = String(S.idx2);
+      knobText(); drawAll(); return;
+    }
+    if (!d || !(d.trans || d.runs_stbd) || !S.bifMap) return;
+    const r = e.target.getBoundingClientRect(), M = S.bifMap;
+    const psi = M.yr[1] - (e.clientY - r.top - M.y0) / M.ph * (M.yr[1] - M.yr[0]);
+    const eqs = d.trans ? d.settings[settingOf(S.idx, S.idx2)].equilibria : d.runs[S.idx].equilibria;
+    const near = eqs.reduce((a, q) => (Math.abs(q.p - psi) < Math.abs(a.p - psi) ? q : a));
+    if (d.trans ? near.stable : near.side !== 0) putOnSide(near.side); else putOnMiddle(psi >= near.p ? 1 : -1);
+    knobText(); drawAll();
+  });
+  $("bifview").addEventListener("change", (e) => { S.bifView = e.target.value; drawAll(); });
+  $("play").addEventListener("click", () => setPlaying(!S.playing));
+  $("restart").addEventListener("click", () => { S.frame = 0; drawAll(); });
+  $("speed").addEventListener("change", (e) => { S.speed = Number(e.target.value); });
+  $("proj").addEventListener("change", (e) => { S.proj = e.target.value; drawAll(); });
+  $("scrub").addEventListener("input", (e) => { S.frame = Number(e.target.value); drawAll(); });
+  $("cv-time").addEventListener("click", (e) => {
+    const r = e.target.getBoundingClientRect(), run = current().run;
+    const frac = (e.clientX - r.left - 50) / (r.width - 68);
+    S.frame = Math.max(0, Math.min(run.g.length - 1, Math.round(frac * (run.g.length - 1)))); drawAll();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "Space" && !["INPUT", "SELECT", "BUTTON"].includes(document.activeElement.tagName)) { e.preventDefault(); setPlaying(!S.playing); }
+  });
+  const redraw = () => { if (ALL[S.demo]) drawAll(); };
+  if (window.ResizeObserver) new ResizeObserver(redraw).observe(document.querySelector(".sheet"));
+  // Mini view: off until the viewer clicks "Show ship view" (× or the button again turns it off). While on, it is
+  // shown only when less than a fifth of the big top view is on screen and less than 60 % of the Detail graphs have
+  // been scrolled past, so it is gone again in the "About" text. Click the picture to scroll back up; drag the bar
+  // to move it, the bottom-right corner to resize it. Position and size are remembered in this browser.
+  const mini = $("mini"), detail = document.querySelector(".detail");
+  let topVisible = true, detailVisible = false, miniOn = false;
+  function checkDetail() { // Detail graphs on screen, and the viewer has not scrolled past 60 % of them
+    const r = detail.getBoundingClientRect();
+    const on = r.top < window.innerHeight && -r.top < 0.6 * r.height;
+    if (on !== detailVisible) { detailVisible = on; updateMini(); }
+  }
+  function updateMini() {
+    mini.hidden = !miniOn || topVisible || !detailVisible || !ALL[S.demo];
+    $("mini-show").textContent = miniOn ? "Hide ship view" : "Show ship view";
+    $("mini-show").setAttribute("aria-pressed", miniOn ? "true" : "false");
+    redraw();
+  }
+  function setMiniClosed(c) { miniOn = !c; updateMini(); }
+  function placeMini(x, y) { // top-left corner in px, kept fully on screen
+    const r = mini.getBoundingClientRect();
+    x = Math.max(0, Math.min(window.innerWidth - r.width, x)); y = Math.max(0, Math.min(window.innerHeight - r.height, y));
+    Object.assign(mini.style, { left: x + "px", top: y + "px", right: "auto", bottom: "auto" });
+    return [x, y];
+  }
+  if (window.IntersectionObserver) {
+    new IntersectionObserver(([en]) => { topVisible = en.intersectionRatio > 0.2; updateMini(); },
+      { threshold: [0, 0.2, 0.5, 1] }).observe($("cv-top"));
+  }
+  window.addEventListener("scroll", checkDetail, { passive: true });
+  window.addEventListener("resize", checkDetail);
+  checkDetail();
+  $("mini-close").addEventListener("click", () => setMiniClosed(true));
+  $("mini-show").addEventListener("click", () => setMiniClosed(miniOn));
+  $("cv-mini").addEventListener("click", () => $("cv-top").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" }));
+  let drag = null, saved = null;
+  try { saved = JSON.parse(localStorage.getItem("fishtail-mini-pos") || "null"); } catch (e) { /* ignore */ }
+  $("mini-bar").addEventListener("pointerdown", (e) => {
+    if (e.target.closest(".mini-x")) return;
+    const r = mini.getBoundingClientRect();
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    $("mini-bar").setPointerCapture(e.pointerId);
+  });
+  $("mini-bar").addEventListener("pointermove", (e) => { if (drag) placeMini(e.clientX - drag.dx, e.clientY - drag.dy); });
+  $("mini-bar").addEventListener("pointerup", () => {
+    if (!drag) return;
+    drag = null;
+    const r = mini.getBoundingClientRect();
+    try { localStorage.setItem("fishtail-mini-pos", JSON.stringify([r.left, r.top])); } catch (e) { /* ignore */ }
+  });
+  // The first time the mini view is shown: apply the remembered size and position (it needs a size to be kept on
+  // screen), and pin it by its top-left corner so that resizing from the bottom-right corner behaves as expected.
+  let savedSize = null;
+  try { savedSize = JSON.parse(localStorage.getItem("fishtail-mini-size") || "null"); } catch (e) { /* ignore */ }
+  new MutationObserver(() => {
+    if (mini.hidden || mini.dataset.placed) return;
+    if (savedSize) Object.assign(mini.style, { width: savedSize[0] + "px", height: savedSize[1] + "px" });
+    const r = mini.getBoundingClientRect();
+    placeMini(saved ? saved[0] : r.left, saved ? saved[1] : r.top);
+    mini.dataset.placed = "1";
+  }).observe(mini, { attributes: true, attributeFilter: ["hidden"] });
+  if (window.ResizeObserver) new ResizeObserver(() => {
+    if (mini.hidden) return;
+    redraw();
+    try { localStorage.setItem("fishtail-mini-size", JSON.stringify([mini.offsetWidth, mini.offsetHeight])); } catch (e) { /* ignore */ }
+  }).observe(mini);
+  window.addEventListener("resize", () => { if (mini.style.left) { const r = mini.getBoundingClientRect(); placeMini(r.left, r.top); } });
+  updateMini();
+
+  readColors();
+  let first = ORDER.find((o) => ALL[o]) || ORDER[0];
+  try { const saved = localStorage.getItem("fishtail-demo"); if (saved && ALL[saved]) first = saved; } catch (e) { /* ignore */ }
+  const fromHash = location.hash.slice(1); // index.html#wind opens that tab directly
+  if (ALL[fromHash]) first = fromHash;
+  setPlaying(S.playing);
+  selectDemo(first);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+  requestAnimationFrame(tick);
+})();
+</script>
