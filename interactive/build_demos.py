@@ -21,6 +21,7 @@ Angles are stored in degrees, rates in degrees per unit t*.
 """
 
 import json
+import multiprocessing
 import sys
 from dataclasses import replace
 
@@ -468,10 +469,12 @@ def control_run(s, start):
     t, y = mr.simulate(s, start, t_end_star=T_CTRL, n_out=N_CTRL, rtol=1e-8, atol=1e-10)
     F = np.array([mr.hawser_force_star(y[:, i], s) for i in range(t.size)]) / s.C_F
     status = status_of(y)
-    if status == "fishtails":
-        # Still swinging at the end of the shown run: is it a lasting fishtail, or a swing that is still slowly dying
-        # out (near the Hopf line it decays slowly)? Run on for 800 t* and compare the last two 100 t* windows.
-        t2, y2 = mr.simulate(s, y[:, -1], t_end_star=800.0, n_out=2401, rtol=1e-8, atol=1e-10)
+    if status == "fishtails" and co.is_stable(co.eigenvalues(np.zeros(4), s)):
+        # Still swinging at the end of the shown run although the straight position is stable: is it a lasting
+        # fishtail (thrust limit, bistable), or a swing still slowly dying out (near the Hopf line it decays slowly)?
+        # Run on for 300 t* (not stored) and compare the last two 100 t* windows. Where the straight position is
+        # unstable the swing cannot die out, so no check is needed (the student's suggestion: saves time).
+        t2, y2 = mr.simulate(s, y[:, -1], t_end_star=300.0, n_out=901, rtol=1e-8, atol=1e-10)
         a_last, a_prev = np.ptp(y2[0, -300:]), np.ptp(y2[0, -600:-300])
         if not (np.degrees(a_last) > 0.5 and a_last > 0.95 * a_prev):
             status = "swing dying out"
@@ -514,46 +517,64 @@ def tug_setup(s, ratio):
     return replace(s, C_W=float(ratio) * s.C_F, beta_W=0.0, x_W_L=X_TUG_L)
 
 
+TUG_RATIOS = np.round(np.concatenate([np.linspace(0.0, 1.0, 41), np.linspace(1.2, TUG_MAX, 7)]), 4)
+TUG_C_F = np.round(np.linspace(0.010, 0.058, 13), 4)  # 0.010 = real ship at about 1 m/s; 0.030 = the base case
+TUG_BASE = mr.Rigid(HULL, x_A_L=0.5, L_H_L=0.5, C_F=0.03)
+WORKERS = 10  # parallel processes (the student allowed up to 10 cores)
+
+
+def tug_column(c):
+    """Everything for one friction value C_F = c (one column of the tug grid): diagram, Hopf pull, runs, settings.
+    Columns do not depend on each other, so they are computed in parallel (multiprocessing)."""
+    s0, ratios = TUG_BASE, TUG_RATIOS
+    n1 = ratios.size
+    sc = replace(s0, C_F=float(c))
+    start = uncontrolled_cycle(sc)
+    sig = lambda q: -co.max_oscillatory_growth(tug_setup(sc, q))
+    roots = co.find_crossings(sig, list(np.linspace(0.0, 4 * TUG_MAX, 41)))
+    crit = roots[0] if roots else None  # tug pull at the Hopf point (None: no fishtailing, or beyond 4x range)
+    stable = [co.is_stable(co.eigenvalues(np.zeros(4), tug_setup(sc, q))) for q in ratios]
+    amps = cycle_sweep([tug_setup(sc, q) for q in ratios])
+    has = amps > 0
+    branches = [{"x": r(ratios, 4), "y": [0.0] * n1, "stable": stable, "name": "trailing straight"}]
+    if has.any():
+        cx = [float(v) for v in ratios[has]] + ([crit] if crit is not None and crit <= ratios[-1] else [])
+        cyv = [float(a) for a in amps[has]] + ([0.0] if crit is not None and crit <= ratios[-1] else [])
+        branches += [{"x": r(cx, 4), "y": r(cyv, 3), "stable": [True] * len(cx), "name": "swing (+)", "cycle": True},
+                     {"x": r(cx, 4), "y": r(-np.array(cyv), 3), "stable": [True] * len(cx), "name": "swing (−)",
+                      "cycle": True}]
+    points = [] if crit is None or crit > ratios[-1] else [{"x": round(crit, 4), "y": 0.0, "type": "hopf"}]
+    U_model, U_full = speed_for_friction(float(c), MODEL, FRESH_WATER), speed_for_friction(float(c), HULL, SEA_WATER)
+    runs, settings = [], []
+    for q in ratios:
+        s = tug_setup(sc, q)
+        run = control_run(s, start)
+        run.update({"U_model": None if U_model is None else round(U_model, 3),
+                    "U_full": None if U_full is None else round(U_full, 3)})
+        runs.append(run)
+        settings.append({"equilibria": equilibria_of(s), "x_A_L": s0.x_A_L, "L_H_L": s0.L_H_L,
+                         "tug": {"ratio": float(q)}})
+    print(f"tug: C_F = {c:.4f} done (Hopf pull {crit})", flush=True)
+    return {"diagram": {"xlabel": "tug pull F_tug/F_H0", "ylabel": "hawser angle γ [deg]", "branches": branches,
+                        "points": points, "marker": "swing"},
+            "hopf": None if crit is None else round(crit, 4),
+            "crossing": None if crit is None else crossing("hopf", tug_setup(sc, crit)),
+            "scale": newtons_per_F_H0(float(c)), "runs": runs, "settings": settings}
+
+
 def build_tug():
     """Two knobs: tug pull (fraction of F_H0) and friction C_F. Diagram: swing amplitude against the tug pull."""
-    s0 = mr.Rigid(HULL, x_A_L=0.5, L_H_L=0.5, C_F=0.03)
+    s0, ratios, C_Fs = TUG_BASE, TUG_RATIOS, TUG_C_F
     # fine steps up to 1 F_H0 (base case: Hopf at 0.30), coarser above (a real ship, C_F ~ 0.01, needs about 2.2)
-    ratios = np.round(np.concatenate([np.linspace(0.0, 1.0, 41), np.linspace(1.2, TUG_MAX, 7)]), 4)
-    C_Fs = np.round(np.linspace(0.010, 0.058, 13), 4)  # 0.010 = real ship at about 1 m/s; 0.030 = the base case
     n1, n2 = ratios.size, C_Fs.size
-    settings, runs, diagrams, hopfs, crossings, scale = [None] * (n1 * n2), [None] * (n1 * n2), [], [], [], []
-    for j, c in enumerate(C_Fs):
-        sc = replace(s0, C_F=float(c))
-        start = uncontrolled_cycle(sc)
-        sig = lambda q: -co.max_oscillatory_growth(tug_setup(sc, q))
-        roots = co.find_crossings(sig, list(np.linspace(0.0, 4 * TUG_MAX, 41)))
-        crit = roots[0] if roots else None  # tug pull at the Hopf point (None: no fishtailing, or beyond 4x range)
-        stable = [co.is_stable(co.eigenvalues(np.zeros(4), tug_setup(sc, q))) for q in ratios]
-        amps = cycle_sweep([tug_setup(sc, q) for q in ratios])
-        has = amps > 0
-        branches = [{"x": r(ratios, 4), "y": [0.0] * n1, "stable": stable, "name": "trailing straight"}]
-        if has.any():
-            cx = [float(v) for v in ratios[has]] + ([crit] if crit is not None and crit <= ratios[-1] else [])
-            cyv = [float(a) for a in amps[has]] + ([0.0] if crit is not None and crit <= ratios[-1] else [])
-            branches += [{"x": r(cx, 4), "y": r(cyv, 3), "stable": [True] * len(cx), "name": "swing (+)", "cycle": True},
-                         {"x": r(cx, 4), "y": r(-np.array(cyv), 3), "stable": [True] * len(cx), "name": "swing (−)",
-                          "cycle": True}]
-        points = [] if crit is None or crit > ratios[-1] else [{"x": round(crit, 4), "y": 0.0, "type": "hopf"}]
-        diagrams.append({"xlabel": "tug pull F_tug/F_H0", "ylabel": "hawser angle γ [deg]", "branches": branches,
-                         "points": points, "marker": "swing"})
-        hopfs.append(None if crit is None else round(crit, 4))
-        crossings.append(None if crit is None else crossing("hopf", tug_setup(sc, crit)))
-        scale.append(newtons_per_F_H0(float(c)))
-        for i, q in enumerate(ratios):
-            s = tug_setup(sc, q)
-            run = control_run(s, start)
-            U_model, U_full = speed_for_friction(float(c), MODEL, FRESH_WATER), speed_for_friction(float(c), HULL, SEA_WATER)
-            run.update({"U_model": None if U_model is None else round(U_model, 3),
-                        "U_full": None if U_full is None else round(U_full, 3)})
-            runs[i * n2 + j] = run
-            settings[i * n2 + j] = {"equilibria": equilibria_of(s), "x_A_L": s0.x_A_L, "L_H_L": s0.L_H_L,
-                                    "tug": {"ratio": float(q)}}
-        print(f"tug: C_F = {c:.4f} done (Hopf pull {crit})")
+    with multiprocessing.Pool(WORKERS) as pool:
+        cols = pool.map(tug_column, [float(c) for c in C_Fs], chunksize=1)
+    diagrams = [c["diagram"] for c in cols]
+    hopfs = [c["hopf"] for c in cols]
+    crossings = [c["crossing"] for c in cols]
+    scale = [c["scale"] for c in cols]
+    runs = [cols[j]["runs"][i] for i in range(n1) for j in range(n2)]  # knob-1-major: index = i * n2 + j
+    settings = [cols[j]["settings"][i] for i in range(n1) for j in range(n2)]
     knob = {"key": "tug_ratio", "label": "Tug pull", "symbol": "F_tug/F_H0", "values": r(ratios, 4),
             "default": 0, "digits": 3,
             "help": "Steady pull of a hold-back tug made fast at the stern, pulling downstream, as a fraction of the "
@@ -581,6 +602,15 @@ def contour_lines(xs, ys, Z, level):
     return [[r(seg[:, 0], 5), r(seg[:, 1], 5)] for seg in gen.lines(level)]
 
 
+def thruster_column(job):
+    """Runs for one thrust limit and one k_d, over all k_p (a column of the thruster grid)."""
+    lim, d, kps, start = job
+    s0 = TUG_BASE  # same base case: x_A/L = 0.5, L_H/L = 0.5, C_F = 0.03
+    runs = [control_run(replace(s0, k_p=p, k_d=d, thrust_limit=lim), start) for p in kps]
+    print(f"thruster: limit {lim}, k_d = {d:.4f} done", flush=True)
+    return runs
+
+
 def build_thruster():
     """Two knobs: derivative gain k_d (across) and proportional gain k_p; a thrust-limit switch (3 run sets).
     Diagram: map of the decay rate sigma over (k_d, k_p) with the Hopf line, the margin line and the least-thrust
@@ -599,14 +629,11 @@ def build_thruster():
             s = replace(s0, k_p=float(p), k_d=float(d))
             settings.append({"equilibria": equilibria_of(s), "x_A_L": s0.x_A_L, "L_H_L": s0.L_H_L,
                              "gains": {"k_p": float(p), "k_d": float(d)}})
-    run_sets = []
-    for lim in LIMITS:
-        runs = []
-        for i, d in enumerate(kds):
-            for j, p in enumerate(kps):
-                runs.append(control_run(replace(s0, k_p=float(p), k_d=float(d), thrust_limit=lim), start))
-            print(f"thruster: limit {lim}, k_d = {d:.4f} done")
-        run_sets.append(runs)
+    # one job per (thrust limit, k_d): the runs for every k_p; jobs are independent, so run in parallel
+    jobs = [(float(lim), float(d), [float(p) for p in kps], list(start)) for lim in LIMITS for d in kds]
+    with multiprocessing.Pool(WORKERS) as pool:
+        cols = pool.map(thruster_column, jobs, chunksize=1)
+    run_sets = [[run for col in cols[k * n1:(k + 1) * n1] for run in col] for k in range(len(LIMITS))]
     knob = {"key": "k_d", "label": "Damping gain", "symbol": "k_d", "values": r(kds, 5), "digits": 3,
             "default": int(np.argmin(np.abs(kds - e08["star"]["k_d"]))),
             "help": "How hard the stern thruster pushes against the turning rate (a damper on yaw)."}

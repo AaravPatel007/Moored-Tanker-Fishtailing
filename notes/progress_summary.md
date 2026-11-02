@@ -81,7 +81,7 @@ T = 10 580 kN · strain^1.86 (D25). Stiff rope reproduces the rigid eigenvalues.
   Detail heading turns it on; it hides once more than 60 % of the Detail graphs are scrolled past. Not yet tested by
   scrolling in a real browser (headless Chrome cannot scroll). Playback is back to 10 t*/s with ½×/1×/2×/4×.
 
-## Where to pick up (end of 2026-10-18 session)
+## Where to pick up (end of 2026-10-18 session; superseded by the 2026-11-02 sections below)
 - Demo page (D30) is finished unless the student reports problems after trying it.
 - Student still to check: scrolling/drag/resize of the ship view; D28 (wind at midship or aft, open issue 24).
 - Next real work: step 8 (yaw thruster control) or the report. Do not start without the student's go-ahead.
@@ -100,12 +100,26 @@ T = 10 580 kN · strain^1.86 (D25). Stiff rope reproduces the rigid eigenvalues.
 - E08 and demo D5 (Tug and Thruster tabs) were completed later the same day; results in
   [../experiments/README.md](../experiments/README.md) and the E08 README.
 
+## 2026-11-02 (later): E08 and demo D5 done
+- **Choices (student, D31):** both a hold-back tug and a stern thruster (no bow thruster); non-dimensional gains plus
+  N / kN conversion; optimal = least thrust with σ ≥ σ_min (0.05 U/L PROPOSED); thruster tab = map of (k_d, k_p) +
+  3-button thrust limit (none / 0.02 / 0.01 F_H0, PLACEHOLDER).
+- **E08 (9 figures):** tug Hopf 0.301 F_H0 at C_F 0.03, ≈2.2 F_H0 at real-ship friction; thruster Hopf k_d 0.0064 /
+  k_p 0.0131; ★ k_p 0.004, k_d 0.012 (0.082 F_H0); eigenvalue −0.22 cannot be moved (σ ≤ 0.22); overdamping;
+  bistable for limits 0.0063–0.0113 F_H0; bow thruster much weaker; real ship with fixed kN settings fails at
+  faster currents (tug above ≈1.1 m/s, thruster above ≈1.4 m/s).
+- **Demo:** two new tabs. Data built in parallel (10 cores): tug 6.3 MB; thruster 3.5 + 6.8 + 10.3 MB (one file per
+  limit). Same private link, version 11.
+- **Student to check:** σ_min = 0.05; the tabs in a real browser. Still PLACEHOLDER: thrust/tug sizes (issue 25).
+
 ## Next steps
-1. **Student to check:** D31 (control choices), D28 (wind at midship or aft? open issue 24), issues 25–26.
-2. **Finish step 8:** E08 `run.py` + README + figures (Hopf boundary vs k_d, map with/without control, thrust needed,
-   saturated time runs), then demo D5 (control tab).
-3. **Report and slides** (step 10). Step 9 (forcing) stays cut unless time is left over.
-4. Optional: open issue 22.
+1. **Student to check:** σ_min = 0.05 (D31), the Tug and Thruster tabs, D28 (wind at midship or aft? issue 24).
+2. **Re-run E08** (`$PY -m experiments.E08_control.run`, ~20 min): only to redraw the labels of fig03 (★ legend) and
+   fig07 (× = no fishtailing at any C_F); the fixes are already in `run.py`, the numbers do not change. Stopped
+   on 2026-11-02 at the student's request after fig02; summary.json and all figures from the first run are intact.
+3. **Optional:** cited thrust / tug values (issue 25) to replace the PLACEHOLDERs.
+4. **Report and slides** (step 10). Step 9 (forcing) stays cut unless time is left over.
+5. Optional: open issue 22.
 
 ## How to run things (from the project root)
 ```bash

@@ -258,7 +258,15 @@ Status words: **AGREED** (student said yes), **PROPOSED** (waiting for the stude
 - **Still open:** cited values for the thrust limit, thruster position and tug pull (open issue 25); σ_min to be
   confirmed by the student.
 - **First results (E08):** tug Hopf at 0.301 F_H0 (base case C_F = 0.03); at real-ship friction (C_F ≈ 0.01) about
-  2.2 F_H0. Thruster: Hopf at k_d ≈ 0.008 (k_p = 0) or k_p ≈ 0.016 (k_d = 0). One eigenvalue (−0.2205 U/L) does not
+  2.2 F_H0. Thruster: Hopf at k_d = 0.0064 (k_p = 0) or k_p = 0.0131 (k_d = 0). One eigenvalue (−0.2205 U/L) does not
   move with the gains (a sideways drift a heading controller cannot reach), so σ ≤ 0.22. Too much k_d overdamps (the
-  pair splits into two real λ and one moves back right). Saturation gives bistability: at a limit of 0.01 F_H0 the
-  full fishtail survives while a 3° nudge dies out (same gains).
+  pair splits into two real λ and one moves back right). ★ = k_p 0.004, k_d 0.012 (thrust needed 0.082 F_H0).
+  Saturation gives bistability: with the ★ gains, for limits 0.0063–0.0113 F_H0 the full fishtail survives while a 3°
+  nudge dies out. Full table: experiments/E08_control/README.md.
+- **Demo D5 (two tabs, 2026-11-02).** Every run starts from the full uncontrolled fishtail with the control switched
+  on at t* = 0 (200 t* shown). Tug tab: 48 pulls (0–1 in steps of 0.025, then to 2.4) × 13 C_F (0.010–0.058).
+  Thruster tab: 31 k_d (0–0.06) × 16 k_p (0–0.03) × 3 limits (none / 0.02 / 0.01 F_H0, one data file each, < 16 MB).
+  Run label: a run still swinging at 200 t* while the straight position is stable is run on for 300 t* more (not
+  stored) and called "fishtails" only if its swing no longer shrinks (last 100 t* ≥ 95 % of the 100 t* before),
+  otherwise "swing dying out"; where the straight position is unstable no check is needed (student's suggestion,
+  shortened from 800 t*). Builds run in parallel (multiprocessing, 10 cores, student's OK).

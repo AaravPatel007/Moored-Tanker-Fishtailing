@@ -266,7 +266,7 @@ input.scrub::-moz-range-thumb { background: var(--ink); width: 6px; height: 16px
       <div class="key"><span>current: right to left</span><span><i style="border-top-color:var(--mute)"></i>stern path</span></div>
     </section>
     <section class="view" aria-label="Bifurcation diagram">
-      <div class="view-head"><span class="label">Bifurcation diagram</span>
+      <div class="view-head"><span class="label" id="bif-title">Bifurcation diagram</span>
         <select class="btn" id="bifview" aria-label="Which bifurcation diagram" hidden>
           <option value="force">ψ vs wind force (move along it)</option>
           <option value="xa">ψ vs attachment point</option>
@@ -488,7 +488,7 @@ input.scrub::-moz-range-thumb { background: var(--ink); width: 6px; height: 16px
         hullPts(pose(run, i), b).forEach(([x, y]) => { if (x < xmin) xmin = x; if (Math.abs(y) > ymax) ymax = Math.abs(y); });
       }
     });
-    return { xmin: xmin - 0.06, xmax: 0.3, ymax: ymax + 0.06 };
+    return { xmin: xmin - 0.06 - (d.tug ? 0.42 : 0), xmax: 0.3, ymax: ymax + 0.06 }; // tug tab: room for the tug
   }
 
   // ---------- panels ----------
@@ -678,15 +678,16 @@ input.scrub::-moz-range-thumb { background: var(--ink); width: 6px; height: 16px
       ctx.lineTo(x1 - 9 * Math.cos(a + 0.45), y1 - 9 * Math.sin(a + 0.45)); ctx.closePath(); ctx.fill();
     };
     if (run.tug && run.tug.ratio > 0) { // tug line: length grows with the pull; the tug itself is the small block
-      const len = 0.08 + 0.12 * Math.min(run.tug.ratio, 2.4) / 2.4, end = [stern[0] - len, stern[1]];
+      const len = 0.12, pull = 0.06 + 0.2 * Math.min(run.tug.ratio, 2.4) / 2.4, end = [stern[0] - len, stern[1]];
       ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2;
       ctx.beginPath(); const [t0x, t0y] = P(stern[0], stern[1]), [t1x, t1y] = P(end[0], end[1]);
       ctx.moveTo(t0x, t0y); ctx.lineTo(t1x, t1y); ctx.stroke();
-      ctx.fillStyle = C.warn; ctx.fillRect(t1x - 7, t1y - 4, 10, 8); ctx.strokeRect(t1x - 7, t1y - 4, 10, 8);
-      arrow([end[0] - 0.01, end[1]], [end[0] - 0.01 - len * 0.6, end[1]], C.warn);
+      ctx.fillStyle = C.warn; ctx.fillRect(t1x - 20, t1y - 6, 20, 12); ctx.strokeRect(t1x - 20, t1y - 6, 20, 12);
+      const [hx] = P(end[0], end[1]), back = (hx - (t1x - 22)) / (P(1, 0)[0] - P(0, 0)[0]);
+      arrow([end[0] - back, end[1]], [end[0] - back - pull, end[1]], C.warn); // arrow length ~ pull
     }
     if (run.T) { // thruster: arrow along the ship's sideways axis e_y, length ~ thrust; dashed when at the limit
-      const T = run.T[i], lim = d.limits && d.limits[S.limit], big = 0.05;
+      const T = run.T[i], lim = d.limits && d.limits[S.limit], big = lim || 0.1; // full length = limit (or 0.1 F_H0)
       if (Math.abs(T) > 1e-4) {
         const len = 0.04 + 0.14 * Math.min(Math.abs(T), big) / big, sg = Math.sign(T);
         arrow(stern, [stern[0] + sg * len * ps.ey[0], stern[1] + sg * len * ps.ey[1]], C.warn,
@@ -739,7 +740,7 @@ input.scrub::-moz-range-thumb { background: var(--ink); width: 6px; height: 16px
     const k = d.knob;
     if (d.map) { drawMap(d, run, ctx, w, h); return; }
     let dg = d.diagrams ? d.diagrams[S.idx2] : d.diagram, xr0 = null, yr0 = null, ref = null;
-    if (d.diagrams) { xr0 = [k.values[0], k.values[k.values.length - 1]]; yr0 = d.yrange_swing; }
+    if (d.diagrams) xr0 = [k.values[0], k.values[k.values.length - 1]]; // y fits this friction's own swing
     if (d.wind && S.bifView === "force") { // rest heading against wind force, for the chosen direction: the force
       dg = d.force_diagrams[S.idx2]; xr0 = d.xrange_force; yr0 = d.yrange_force; // slider moves along it
     } else if (d.wind) { // rest heading against attachment point, for this wind; the no-wind pitchfork in grey
@@ -824,13 +825,14 @@ input.scrub::-moz-range-thumb { background: var(--ink); width: 6px; height: 16px
       const x = m.X(k1[Math.floor(si / n2)]), y = m.Y(k2[si % n2]);
       ctx.beginPath(); ctx.moveTo(x - 3.5, y - 3.5); ctx.lineTo(x + 3.5, y + 3.5); ctx.moveTo(x + 3.5, y - 3.5); ctx.lineTo(x - 3.5, y + 3.5); ctx.stroke();
     });
-    // ★ and the ship's gains now
-    ctx.font = "18px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillStyle = C.paper; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2;
-    ctx.strokeText("★", m.X(M.star.k_d), m.Y(M.star.k_p)); ctx.fillText("★", m.X(M.star.k_d), m.Y(M.star.k_p));
+    // the ship's gains now, then ★ on top (so it stays visible when the sliders sit on it)
     const X = m.X(k1[S.idx]), Y = m.Y(k2[S.idx2]);
     ctx.fillStyle = C.now; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
     ctx.fillRect(X - 5.5, Y - 5.5, 11, 11); ctx.strokeRect(X - 5.5, Y - 5.5, 11, 11);
+    ctx.font = "20px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = C.paper; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.4;
+    ctx.strokeText("★", m.X(M.star.k_d), m.Y(M.star.k_p) - 12); ctx.fillText("★", m.X(M.star.k_d), m.Y(M.star.k_p) - 12);
+    ctx.beginPath(); ctx.moveTo(m.X(M.star.k_d), m.Y(M.star.k_p) - 3); ctx.lineTo(m.X(M.star.k_d), m.Y(M.star.k_p)); ctx.stroke();
     ctx.restore();
     $("bif-key").innerHTML = '<span><span class="sw" style="background:rgba(208,59,59,0.3)"></span>fishtails</span>' +
       '<span><span class="sw" style="background:rgba(42,120,214,0.6)"></span>settles (darker = faster)</span>' +
@@ -1185,6 +1187,7 @@ input.scrub::-moz-range-thumb { background: var(--ink); width: 6px; height: 16px
         (d.crossings ? "<span>● crossing</span>" : !d.crossing ? "" : "<span>" + (d.crossing.type === "pitchfork" ? "▲" : "●") + " crossing</span>");
     $("bif-help").innerHTML = bifHelp(d);
     $("control-help").hidden = !d.grid;
+    $("bif-title").textContent = d.map ? "Gain map" : "Bifurcation diagram";
     S.eigHtml = "";
     S.frame = 0;
     try { localStorage.setItem("fishtail-demo", id); } catch (e) { /* storage may be blocked */ }
