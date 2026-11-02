@@ -112,6 +112,14 @@ T = 10 580 kN · strain^1.86 (D25). Stiff rope reproduces the rigid eigenvalues.
   limit). Same private link, version 11.
 - **Student to check:** σ_min = 0.05; the tabs in a real browser. Still PLACEHOLDER: thrust/tug sizes (issue 25).
 
+## 2026-11-03: demo page text and range fixes (student's feedback)
+- Pitchfork slider and diagram now end at x_A/L = 0.5 (the bow); further forward is off the ship. Wind tab's
+  "ψ vs attachment point" axis also ends at 0.5. Pitchfork data rebuilt; wind data only had its axis range changed.
+- Number fixes in the page text: Hawser-length tab C_F = 0.03 ↔ 1:90 model at 0.17 m/s (was "0.3 m/s"); control
+  check runs on for 300 t* (was "800"); fast eigenvalue below −1 U/L (was "−1.7"; Tug tab reaches −1.02); real-ship
+  time scale shown only for C_F < 0.021 (ITTC line at 1 cm/s).
+- "How to read it" shortened in every tab.
+
 ## Next steps
 1. **Student to check:** σ_min = 0.05 (D31), the Tug and Thruster tabs, D28 (wind at midship or aft? issue 24).
 2. **Re-run E08** (`$PY -m experiments.E08_control.run`, ~20 min): only to redraw the labels of fig03 (★ legend) and

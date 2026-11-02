@@ -120,10 +120,10 @@ def common(demo_id, title, knob, s0):
 
 def build_pitchfork():
     s0 = mr.Rigid(HULL, x_A_L=0.4, L_H_L=0.5, C_F=0.05)
-    values = np.round(np.arange(0.02, 0.601, 0.0125), 4)
+    values = np.round(np.arange(0.0125, 0.501, 0.0125), 4)  # up to the bow (0.5): further forward is off the ship
     x_cr = hydro.critical_turret_position(HULL)
     # Bifurcation diagram: heading at rest against x_A/L (all equilibria), stability along each branch.
-    xs = np.linspace(0.0, 0.6, 241)
+    xs = np.linspace(0.0, 0.5, 201)
     straight_stable, angled_x, angled_p, angled_stable = [], [], [], []
     for xa in xs:
         s = replace(s0, x_A_L=float(xa))
@@ -239,14 +239,15 @@ def build_hawser_length():
     out = common("hawser_length", "Hawser length", knob, s0)
     out.update({"diagram": diagram, "runs": runs, "hopf": round(crit, 4),
                 "crossing": crossing("hopf", replace(s0, L_H_L=float(crit))),
-                "story": "At this friction (C_F = 0.03, like a 1:90 tank model at about 0.3 m/s) a short hawser keeps "
-                         "the ship straight. Longer than L_H/L = %.2f, the ship fishtails." % crit})
+                "story": "At this friction (C_F = %g, like a 1:90 tank model at about %.2f m/s) a short hawser keeps "
+                         "the ship straight. Longer than L_H/L = %.2f, the ship fishtails."
+                         % (s0.C_F, out["U_model"], crit)})
     return out
 
 
 def wind_diagram(s, marker_x):
     """Bifurcation diagram (rest heading against x_A/L) for the wind of s, in the format the page draws."""
-    br = co.wind_branches(s, n_psi=401, n_straight=61)
+    br = co.wind_branches(s, x_hi=0.5, n_psi=401, n_straight=61)  # attachment point at most at the bow
     branches = [{"x": r(seg["x"], 4), "y": r(np.degrees(seg["psi"]), 2), "stable": [bool(v) for v in seg["stable"]]}
                 for seg in br["segments"]]
     points = [{"x": round(x, 4), "y": round(float(np.degrees(p)), 2), "type": "fold"} for x, p in br["folds"]]
@@ -427,7 +428,7 @@ def build_wind():
                 "wind": True, "start_side": 1,  # ... and the ship resting to port
                 "force_diagrams": [force_diagram(setup(0, j)) for j in range(n2)],
                 "fold_ratio": [wind_fold_ratio(s0, b) for b in betas],
-                "xrange_xa": [0.0, 0.6], "yrange_xa": [-60.0, 60.0],
+                "xrange_xa": [0.0, 0.5], "yrange_xa": [-60.0, 60.0],
                 "xrange_force": [0.0, 0.4], "yrange_force": [-20.0, 20.0],
                 "story": "The attachment point is fixed at x_A/L = 0.25, aft of the pitchfork point, so without wind "
                          "the ship can rest on either side. Each slider step changes the wind and then holds it, and "
