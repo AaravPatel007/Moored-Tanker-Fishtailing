@@ -122,11 +122,11 @@ T = 10 580 kN · strain^1.86 (D25). Stiff rope reproduces the rigid eigenvalues.
 
 ## Next steps
 1. **Student to check:** σ_min = 0.05 (D31), the Tug and Thruster tabs, D28 (wind at midship or aft? issue 24).
-2. **Re-run E08** (`$PY -m experiments.E08_control.run`, ~20 min): only to redraw the labels of fig03 (★ legend) and
-   fig07 (× = no fishtailing at any C_F); the fixes are already in `run.py`, the numbers do not change. Stopped
-   on 2026-11-02 at the student's request after fig02; summary.json and all figures from the first run are intact.
+2. ~~Re-run E08~~ **done 2026-11-03**: full re-run (numbers unchanged); fig03 legend ★ fixed, fig07 now shows the
+   × markers, one shared "real ship" label and the legend moved off the tug curve (fig07 redrawn on its own).
 3. **Optional:** cited thrust / tug values (issue 25) to replace the PLACEHOLDERs.
-4. **Report and slides** (step 10). Step 9 (forcing) stays cut unless time is left over.
+4. **Report and slides** (step 10). **Report is only ~5 pages with pictures** (student, 2026-11-03): pick ~5–6 key
+   figures. Step 9 (forcing) stays cut.
 5. Optional: open issue 22.
 
 ## How to run things (from the project root)

@@ -274,16 +274,17 @@ def fig07(summary, star):
             ax.annotate("×: no fishtailing at any C_F ≥ 0.0001", (L_H[none][0], 0.0008), xytext=(10, 18),
                         textcoords="offset points", color=INK_2, fontsize=8.5)
         out[name] = [None if np.isnan(v) else round(float(v), 5) for v in curve]
-    for U in (0.5, 1.0, 2.0):
+    for U in (0.5, 1.0, 2.0):  # the three lines are close together, so they share one label
         cf = hydro.friction_coefficient(U, HULL, SEA_WATER)
         ax.axhline(cf, color=MUTED, lw=0.8, ls=":")
-        ax.text(1.5, cf, f" real ship {U} m/s", va="center", fontsize=8, color=INK_2)
+    ax.annotate("real ship at 0.5, 1, 2 m/s\n(dotted, top to bottom)", (1.5, cf), xytext=(0, 14),
+                textcoords="offset points", ha="right", fontsize=8, color=INK_2)
     ax.set_xlabel("hawser length L_H / L")
     ax.set_ylabel("Hopf friction coefficient C_F (fishtails below the line)")
     ax.set_title("Fishtailing boundary with and without control\n(x_A/L = 0.5; gains and tug ratio fixed in "
                  "non-dimensional form)")
     ax.set_ylim(0, None)
-    ax.legend(loc="center right")
+    ax.legend(loc="upper right", bbox_to_anchor=(1.0, 0.86))  # in the gap between the blue and orange curves
     fig.tight_layout()
     save(fig, EXP, "fig07_stability_map")
     summary["fig07"] = {"L_H_L": L_H.round(4).tolist(), **out}
