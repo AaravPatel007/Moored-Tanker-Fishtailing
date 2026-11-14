@@ -8,22 +8,25 @@
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{float}
+\usepackage{enumitem}
 \usepackage[font=small,labelfont=bf,skip=4pt]{caption}
 \usepackage[colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue!60!black]{hyperref}
 \usepackage{titlesec}
 
 \graphicspath{{figures/}}
 \titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
 \titlespacing*{\section}{0pt}{8pt plus 2pt}{3pt}
+\titlespacing*{\subsection}{0pt}{6pt plus 2pt}{2pt}
 \setlength{\parskip}{3pt}
 \setlength{\parindent}{0pt}
 \setlength{\abovedisplayskip}{4pt}
 \setlength{\belowdisplayskip}{4pt}
 \setlength{\textfloatsep}{8pt plus 2pt}
 \setlength{\intextsep}{6pt plus 2pt}
+\setlist[itemize]{leftmargin=1.2em,itemsep=1pt,topsep=2pt,parsep=0pt}
 
 \newcommand{\FHz}{F_{H0}}
-\newcommand{\xTcr}{x_{Tcr}}
 \newcommand{\tentothe}[2]{$#1\times10^{#2}$}
 
 \begin{document}
@@ -59,42 +62,78 @@ in a perfectly steady current. This motion is called fishtailing, and it matters
 falls with every swing.
 
 If the bow moves off the current, the Munk moment tries to turn the hull further broadside, while the hawser tension and
-the side force on the hull work to bring it back. Depending on where the hawser is tied, how long it is and how large the
-friction drag is, the ship trails straight, rests at a steady angle or fishtails. Fishtailing has been observed in flume
-tests \cite{aghamohammadi}, and Simos \cite{simos} developed a hydrodynamic model and compared it with tests on a 1:90
-tanker model. Since the current is steady, the swing is a self-excited limit cycle, which makes this a natural
-application of the bifurcation theory in our course text \cite{strogatz}.
+the side force on the hull pull it back. Depending on where the hawser is tied, how long it is and how large the
+friction drag is, the ship trails straight, rests at a steady angle or fishtails. Simos \cite{simos} built a
+hydrodynamic model for this problem and tested it on a 1:90 tanker model, and fishtailing has also been seen in flume
+tests \cite{aghamohammadi}. Because the current is steady, the swing is a self-excited limit cycle, so the problem is a
+natural fit for the bifurcation theory of our course text \cite{strogatz}. We rebuilt Simos's model and studied six
+cases: the attachment point, friction, hawser length, a side wind, a hold-back tug and a stern thruster.
 
-We rebuilt the rigid-hawser model of Simos, checked it against his stability boundary, and then varied the attachment
-point (Section~\ref{sec:pitchfork}), friction (Section~\ref{sec:friction}) and hawser length (Section~\ref{sec:hawser})
-one at a time. We then added a steady side wind as a symmetry-breaking perturbation (Section~\ref{sec:wind}) and tested a
-hold-back tug and a stern thruster as ways of stopping the swing (Section~\ref{sec:control}). We claim no new physics.
-
-\section{Ship and model}\label{sec:model}
-The ship is the Vidal de Negreiros, a 320~m VLCC. Table~\ref{tab:ship} lists its particulars when fully loaded and in
-ballast.
+\section{Methodology}
+\textbf{Ship.} We use the Vidal de Negreiros, a 320~m VLCC, in the fully loaded condition. Its particulars, taken from
+Simos \cite{simos}, are listed in Table~\ref{tab:ship}.
 
 \begin{table}[H]
 \centering\footnotesize
-\caption{Full-scale particulars of the Vidal de Negreiros, taken from Simos \cite{simos}.}
+\caption{Particulars of the Vidal de Negreiros (full scale, fully loaded).}
 \label{tab:ship}
-\begin{tabular}{@{}lcc@{\hspace{1.2em}}lcc@{}}
+\begin{tabular}{@{}lc@{\hspace{2.5em}}lc@{}}
 \toprule
-Quantity & 100\,\% load & 40\,\% load & Quantity & 100\,\% load & 40\,\% load\\
-\midrule
-Length $L$ (m) & 320 & 320 & Mass $M$ (kg) & \tentothe{3.219}{8} & \tentothe{1.117}{8}\\
-Beam $B$ (m) & 54.5 & 54.5 & Yaw inertia $I_z$ (kg\,m$^2$) & \tentothe{2.06}{12} & \tentothe{0.72}{12}\\
-Draft $T$ (m) & 21.47 & 8.63 & Added mass, surge $M_{11}$ (kg) & \tentothe{1.848}{7} & \tentothe{0.254}{7}\\
-Block coefficient $C_B$ & 0.83 & 0.76 & Added mass, sway $M_{22}$ (kg) & \tentothe{2.725}{8} & \tentothe{0.353}{8}\\
-Wetted surface $S$ (m$^2$) & \tentothe{2.734}{4} & \tentothe{1.791}{4} & Added yaw inertia $M_{66}$ (kg\,m$^2$) & \tentothe{1.579}{12} & \tentothe{0.222}{12}\\
-CG fwd.\ of midship $x_{CG}$ (m) & 9.81 & 4.44 & Sway--yaw coupling $M_{26}$ (kg\,m) & \tentothe{2.209}{9} & \tentothe{0.353}{9}\\
-Cross-flow drag $C_Y$ & 0.84 & 0.52 & Form factor $k$ & 0.39 & 0.39\\
-Cross-flow centre, aft $l_p/L$ & 0.059 & 0.100 & Critical point $\xTcr/L$ (eq.~\ref{eq:xcr}) & 0.359 & 0.193\\
+Length $L$ (m) & 320 & Mass $M$ (kg) & \tentothe{3.219}{8}\\
+Beam $B$ (m) & 54.5 & Yaw inertia $I_z$ (kg\,m$^2$) & \tentothe{2.06}{12}\\
+Draft $T$ (m) & 21.47 & Added mass, surge $M_{11}$ (kg) & \tentothe{1.848}{7}\\
+Block coefficient $C_B$ & 0.83 & Added mass, sway $M_{22}$ (kg) & \tentothe{2.725}{8}\\
+CG forward of midship $x_{CG}$ (m) & 9.81 & Added yaw inertia $M_{66}$ (kg\,m$^2$) & \tentothe{1.579}{12}\\
+Cross-flow drag coefficient $C_Y$ & 0.84 & Sway--yaw coupling $M_{26}$ (kg\,m) & \tentothe{2.209}{9}\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{figure}[H]
+\textbf{Model.} The hawser is a rigid link of length $L_H$, tied a distance $x_A$ forward of midship
+(Fig.~\ref{fig:schematic}). With the buoy at the origin and the $X$ axis pointing upstream, the attachment point and
+midship are at
+\begin{equation}
+\mathbf A=L_H(-\cos\gamma,\ \sin\gamma),\qquad \mathbf O=\mathbf A-x_A(\cos\psi,\ \sin\psi),
+\end{equation}
+so the hawser angle $\gamma$ and the heading $\psi$ fix the position of the ship, and the state is
+$(\gamma,\psi,\dot\gamma,\dot\psi)$. Differentiating $\mathbf O$ and adding the current $U$ gives the velocities
+relative to the water,
+\begin{equation}
+u = U\cos\psi + L_H\dot\gamma\sin(\gamma+\psi),\qquad
+v = -U\sin\psi + L_H\dot\gamma\cos(\gamma+\psi) - x_A\dot\psi,\qquad
+r=\dot\psi.
+\end{equation}
+The hawser pulls the attachment point towards the buoy with force $F_H$, which gives
+$F_X=F_H\cos(\gamma+\psi)$, $F_Y=-F_H\sin(\gamma+\psi)$ and a yaw moment $-x_AF_H\sin(\gamma+\psi)$. With the water
+loads $X_R$, $Y_R$, $N_R$ from Simos's model, $m_{26}=Mx_{CG}+M_{26}$ and $I_{66}=I_Z+M_{66}$ (yaw inertia about
+midship), the manoeuvring equations in surge, sway and yaw are
+\begin{equation}
+\begin{aligned}
+(M+M_{11})\dot u-(M+M_{22})vr-m_{26}r^2&=X_R+F_H\cos(\gamma+\psi),\\
+(M+M_{22})\dot v+(M+M_{11})ur+m_{26}\dot r&=Y_R-F_H\sin(\gamma+\psi),\\
+I_{66}\dot r+m_{26}(\dot v+ur)&=N_R-x_AF_H\sin(\gamma+\psi).
+\end{aligned}
+\end{equation}
+Since the hawser length is fixed, $F_H$ is an unknown. Writing $\dot u=L_H s\,\ddot\gamma+a_u$ and
+$\dot v=L_H c\,\ddot\gamma-x_A\ddot\psi+a_v$, with $s=\sin(\gamma+\psi)$, $c=\cos(\gamma+\psi)$ and $a_u$, $a_v$ the
+known remainders, turns the three equations into a linear system that we solve at every time step:
+{\small
+\begin{equation}
+\begin{bmatrix}
+(M+M_{11})L_Hs & 0 & -c\\
+(M+M_{22})L_Hc & m_{26}-(M+M_{22})x_A & s\\
+m_{26}L_Hc & I_{66}-m_{26}x_A & x_As
+\end{bmatrix}
+\begin{bmatrix}\ddot\gamma\\\ddot\psi\\F_H\end{bmatrix}
+=
+\begin{bmatrix}
+X_R+(M+M_{22})vr+m_{26}r^2-(M+M_{11})a_u\\
+Y_R-(M+M_{11})ur-(M+M_{22})a_v\\
+N_R-m_{26}(a_v+ur)
+\end{bmatrix}.
+\end{equation}}
+
+\begin{figure}[t]
 \centering
 \begin{minipage}[b]{0.47\linewidth}\centering
 \includegraphics[width=\linewidth]{fig01_schematic}
@@ -103,197 +142,192 @@ Cross-flow centre, aft $l_p/L$ & 0.059 & 0.100 & Critical point $\xTcr/L$ (eq.~\
 \end{minipage}\hfill
 \begin{minipage}[b]{0.5\linewidth}\centering
 \includegraphics[width=\linewidth]{fig02_pitchfork}
-\caption{Pitchfork of the resting heading against the attachment point ($L_H/L=0.5$, $C_F=0.05$).}
+\caption{Rest heading against $x_A/L$ ($L_H/L=0.5$, $C_F=0.05$).}
 \label{fig:pitchfork}
 \end{minipage}
 \end{figure}
 
-We treat the hawser as a rigid link of length $L_H$, tied a distance $x_A$ forward of midship (Fig.~\ref{fig:schematic}).
-The state is $(\gamma,\psi,\dot\gamma,\dot\psi)$, and the velocities of the ship relative to the water are
-\begin{equation}
-u = U\cos\psi + L_H\dot\gamma\sin(\gamma+\psi),\quad
-v = -U\sin\psi + L_H\dot\gamma\cos(\gamma+\psi) - x_A\dot\psi,\quad
-r=\dot\psi.
-\end{equation}
-With $m_{26}=Mx_{CG}+M_{26}$ and $I_{66}=I_Z+M_{66}$ ($I_Z$ taken about midship), the surge, sway and yaw equations are
-\begin{equation}
-\begin{aligned}
-(M+M_{11})\dot u-(M+M_{22})vr-m_{26}r^2&=X_R+F_H\cos(\gamma+\psi),\\
-(M+M_{22})\dot v+(M+M_{11})ur+m_{26}\dot r&=Y_R-F_H\sin(\gamma+\psi),\\
-I_{66}\dot r+m_{26}(\dot v+ur)&=N_R-x_AF_H\sin(\gamma+\psi).
-\end{aligned}
-\end{equation}
-Since the hawser length is fixed, $F_H$ is solved together with $\ddot\gamma$ and $\ddot\psi$ from a linear $3\times3$
-system at each step. The water loads follow Simos's model, for instance
-$Y_R=\tfrac12\rho(u^2+v^2)LT\,C_{2C}(\alpha)+\Delta Y(u,v,r)$ with $\alpha=\pi+\operatorname{atan2}(v,u)$, and the yaw
-coefficient $C_{6C}$ contains the Munk moment.
+\textbf{Current speed.} Time is measured as $t^*=Ut/L$, the time the current takes to pass one ship length. In these
+units the current speed survives only through the skin-friction coefficient $C_F$, which falls as the current speeds
+up, so we use $C_F$ as the speed parameter. It is about 0.02--0.05 for
+the 1:90 tank model and about 0.010 for the real ship in a 1~m/s current. When the ship trails straight, the hawser
+tension equals the friction drag, $\FHz=C_F\tfrac12\rho U^2LT$, and all tug, wind and thruster forces are given as
+multiples of $\FHz$.
 
-With time scaled as $t^*=Ut/L$, the current speed survives only in the friction coefficient,
-\begin{equation}
-C_F=\frac{0.075}{(\log_{10}Re-2)^2}\,\frac{S}{TL}\,(1+k),\qquad Re=\frac{UL}{\nu}.
-\end{equation}
-$C_F$ thus stands in for current speed and scale. It is about 0.02--0.05 for the 1:90 model and 0.009--0.010 for the
-loaded ship at 1--1.9~m/s. The tension when trailing straight is $\FHz=C_F\tfrac12\rho U^2LT$. Linearising about $\gamma=\psi=0$ with $q=(\gamma,\psi)$ and $m_{22}=M+M_{22}$ gives
-$A\ddot q+B\dot q+Cq=0$, where
-{\small\[
-A=\begin{bmatrix}L_Hm_{22}&m_{26}-x_Am_{22}\\L_Hm_{26}&I_{66}-m_{26}x_A\end{bmatrix}\!,\;
-B=\begin{bmatrix}-L_HY_v&(M_{11}-M_{22})U-Y_r+Y_vx_A\\-L_HN_v&-N_r+N_vx_A\end{bmatrix}\!,\;
-C=\begin{bmatrix}\FHz&\FHz+UY_v\\\FHz x_A&\FHz x_A+UN_v\end{bmatrix}\!.
-\]}%
-The eigenvalues $\lambda$ of $J=\bigl[\begin{smallmatrix}0&I\\-A^{-1}C&-A^{-1}B\end{smallmatrix}\bigr]$ decide the
-stability of straight trailing. Limit cycles come from long simulations and, near a Hopf point, a shooting method, with
-Floquet multipliers for their stability. A symbolic derivation showed that the side-force sign in Simos's eq.~5.3 is a
-misprint and that eq.~B.13 omits a lift term, without which the Hopf boundary is 3--6 times too high.
+\textbf{Stability and limit cycles.} A rest position is stable when all four eigenvalues $\lambda=\sigma\pm i\omega$ of
+the linearised system have negative real parts. A real eigenvalue crossing zero signals a pitchfork or a fold, and a
+complex pair crossing the imaginary axis signals a Hopf bifurcation. Limit cycles were found by simulation and, near a Hopf point, by a
+shooting method, with Floquet multipliers for their stability. Our Hopf boundary agrees with Simos's published curve to within $+0.5$\,\% on average
+(Fig.~\ref{fig:hawser}a).
 
-\section{Attachment point: pitchfork bifurcation}\label{sec:pitchfork}
-For a ship at rest, subtracting $x_A$ times the sway equation from the yaw equation removes $F_H$ and leaves
-\begin{equation}
-C_{6C}(\pi-\psi)-\frac{x_A}{L}\,C_{2C}(\pi-\psi)=0.
-\end{equation}
-The resting heading therefore does not depend on hawser length or friction. Since $\det J=\det C/\det A$ and
-$\det C=\FHz U(N_v-x_AY_v)$, one real eigenvalue passes through zero at
-\begin{equation}\label{eq:xcr}
-\frac{\xTcr}{L}=\frac{\tfrac12+2.4\,T/L}{1+0.4\,C_BB/T},
-\end{equation}
-which is 0.359 loaded and 0.193 in ballast. Forward of this point the side force on the hull acts like a weathervane tail
-and keeps the ship in line. Further aft the Munk moment wins, and two stable mirror-image angled positions appear, so the
-pitchfork is supercritical (Fig.~\ref{fig:pitchfork}).
+\textbf{Initial conditions.} Each run starts from straight trailing with a small nudge, $\gamma=3^\circ$,
+$\psi=1^\circ$ and zero rates. In parameter sweeps each run starts from where the previous one ended, and sweeping in
+both directions reveals any hysteresis. In the control
+studies the runs start from the fully developed fishtail, with the control switched on at $t^*=0$, and in the wind
+study they start with the ship resting at an angle to port.
 
-The branches leave the axis in a straight line, unlike the textbook pitchfork. Near $\xTcr$ the rest condition reduces to
-$\dot x=rx-x|x|$ in place of $\dot x=rx-x^3$, because the restoring term is cross-flow drag, proportional to $\psi|\psi|$.
-The angle thus grows as $(\xTcr-x_A)$, with a measured log--log slope of 1.00 where the textbook form gives $\tfrac12$.
 
-\section{Friction: Hopf bifurcation}\label{sec:friction}
-Lowering $C_F$ weakens the tension that pulls the ship back into line. For $x_A/L=L_H/L=0.5$, a complex pair of
-eigenvalues $\lambda=\sigma\pm i\omega$ crosses the imaginary axis at $C_F=0.0425$, with $\omega=0.738\,U/L$ and a
-period of $8.51\,L/U$ (Fig.~\ref{fig:eigen}). The period varies roughly as $1/\sqrt{C_F}$, as for a pendulum.
+\section{Results}\label{sec:results}
 
+\subsection{Attachment point: pitchfork}
+\begin{itemize}
+\item \textbf{Set-up:} $x_A/L$ varied (0 = midship, 0.5 = bow); $L_H/L=0.5$ and a high friction $C_F=0.05$ held
+fixed, so the ship never fishtails here.
+\item At rest the hawser force drops out of the equations, leaving
+\[
+N_R(\psi)-x_A\,Y_R(\psi)=0,
+\]
+so the rest heading depends only on $x_A/L$: the water's turning moment about the hawser point must vanish.
+\item Forward of $x_A/L=0.359$ the hull's side force acts like a weathervane tail and the ship trails straight. Aft of
+it the Munk moment wins and the ship settles at a steady angle to port or starboard, e.g.\ $\psi=10.3^\circ$ at
+$x_A/L=0.25$: a pitchfork (Fig.~\ref{fig:pitchfork}).
+\item A real eigenvalue (a slow sideways drift) crosses zero. Just past the pitchfork, straight trailing has $+0.034$ and
+the angled positions $-0.034$, an exchange of stability.
+\item It is supercritical: the new branches are stable and grow from zero. They grow linearly (log--log slope 1.00), not
+as a square root, because cross-flow drag varies as $\psi|\psi|$, giving $\dot\psi=r\psi-q\psi|\psi|$ in place of
+Strogatz's $\dot x=rx-x^3$.
+\end{itemize}
+
+\subsection{Friction: Hopf bifurcation}
 \begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig03_eigenvalues}
-\caption{Eigenvalues of straight trailing as $C_F$ falls from 0.1 (dark) to 0.005 (light): (a) all four, (b) the upper member of the crossing pair.}
-\label{fig:eigen}
+\centering\includegraphics[width=\linewidth]{fig03_friction}
+\caption{Effect of friction ($x_A/L=L_H/L=0.5$): swing amplitude of (a) $\gamma$ and (b) $\psi$, and (c) the largest (open)
+and smallest (filled) hawser force. $\bullet$ marks the Hopf point.}
+\label{fig:friction}
 \end{figure}
+\begin{itemize}
+\item \textbf{Set-up:} $C_F$ varied (lower = faster current); hawser at the bow ($x_A/L=0.5$) and $L_H/L=0.5$.
+\item The ship on its hawser behaves like a pendulum whose restoring force is the tension $\FHz$, which is proportional
+to $C_F$.
+\item A complex pair $\lambda=\sigma\pm i\omega$ crosses the imaginary axis ($\sigma=0$, $\omega\ne0$) at
+$C_F=0.0425$, with $\omega=0.738\,U/L$, a period of $8.5\,L/U$. This is a Hopf bifurcation.
+\item Below it the swing grows and levels off at a fixed size: $\gamma=\pm33^\circ$, $\psi=\pm11^\circ$ at $C_F=0.03$,
+and $\gamma=\pm72^\circ$ at $C_F=0.013$ (Fig.~\ref{fig:friction}).
+\item Sweeps down and up give the same curve, so there is no hysteresis and the Hopf bifurcation is supercritical.
+Floquet multipliers confirm that the cycles are stable.
+\item The amplitude $a$ grows in proportion to the distance past the Hopf point (slope 0.98), since averaging with
+quadratic drag gives $\dot a=\mu a-ca^2$ and hence $a^*=\mu/c$.
+\item Below $C_F\approx0.017$ the hawser tension would turn negative for part of each swing, which a real rope cannot do.
+\end{itemize}
 
+\subsection{Hawser length: Hopf bifurcation}
 \begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig04_amplitude}
-\caption{Limit cycle against friction ($x_A/L=L_H/L=0.5$): amplitude of (a) $\gamma$ and (b) $\psi$, (c) largest (open) and smallest (filled) hawser force. $\bullet$ marks the Hopf point.}
-\label{fig:amplitude}
-\end{figure}
-
-Sweeping $C_F$ down and then up traces the same curve (Fig.~\ref{fig:amplitude}), so there is no hysteresis and the
-bifurcation is supercritical. Floquet multipliers confirm that the cycles are stable. Near onset the amplitude is
-proportional to the distance past the Hopf point (slope 0.98), which averaging a simple oscillator
-$\ddot x-\mu\dot x+D(\dot x)+x=0$ explains:
-\begin{equation}
-D=\dot x|\dot x|:\;\;\dot r=\frac{\mu}{2}r-\frac{4}{3\pi}r^2,\;\; r^*=\frac{3\pi}{8}\mu;\qquad
-D=\dot x^3:\;\;\dot r=\frac{\mu}{2}r-\frac38r^3,\;\; r^*=\sqrt{\frac{4\mu}{3}}.
-\end{equation}
-The ship's swing is limited by quadratic drag, so it follows the first law. The hawser force peaks at $4.2\,\FHz$, and
-below $C_F\approx0.017$ the rigid link would have to push on the ship for part of each cycle, which a real rope cannot do.
-
-\section{Hawser length: Hopf bifurcation}\label{sec:hawser}
-The Hopf friction increases with hawser length ($C_F=0.0298$, $0.0425$, $0.0478$ at $L_H/L=0.2$, $0.5$, $1.0$), so a
-shorter hawser is more stable (Fig.~\ref{fig:hawser}a). Our boundary agrees with Fig.~5.3 of Simos to a mean difference of
-$+0.5$\,\% loaded and $+5.6$\,\% in ballast. At full scale the loaded ship lies below it for all but the shortest hawsers.
-
-\begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig05_hawser_length}
-\caption{(a) Hopf boundary compared with Simos \cite{simos}. (b) Swing amplitude at tank-model friction ($x_A/L=0.5$, $C_Y=0.86$), with Simos's tests read off his figure ($\pm2^\circ$). Small triangles are the fine sweeps in both directions.}
+\centering\includegraphics[width=\linewidth]{fig04_hawser_length}
+\caption{Effect of hawser length. (a) Hopf boundary of straight trailing, compared with Simos \cite{simos}; the dotted
+line marks $C_F=0.03$. (b) Swing amplitude at $C_F=0.03$ for increasing and decreasing hawser length.}
 \label{fig:hawser}
 \end{figure}
+\begin{itemize}
+\item \textbf{Set-up:} $L_H/L$ varied; hawser at the bow and $C_F=0.03$.
+\item A short hawser is a stiff, well-damped pendulum. The Hopf condition $\sigma(L_H)=0$ is met at $L_H/L=0.202$, a
+hawser of about 65~m, and any longer hawser fishtails.
+\item Over all lengths (Fig.~\ref{fig:hawser}a) the boundary rises from $C_F=0.0298$ at $L_H/L=0.2$ to $0.0478$ at
+$1.0$, so shorter hawsers are safer. The real ship, at $C_F\approx0.010$, fishtails for all but the shortest hawsers.
+\item Sweeps of increasing and decreasing length give the same swing, to within $0.05^\circ$. It grows from zero at the
+Hopf point and every cycle is stable, so this Hopf bifurcation is also supercritical (Fig.~\ref{fig:hawser}b).
+\item The swing angle $\gamma$ peaks at about $\pm33^\circ$ near $L_H/L=0.5$ and then falls slowly, but the bow's
+sideways sweep keeps growing, from $\pm87$~m at $L_H/L=0.5$ to $\pm176$~m at $1.5$, while the heading swing levels off
+near $\pm14.5^\circ$.
+\end{itemize}
 
-With $C_F$ held fixed, $L_H/L$ becomes the bifurcation parameter (Fig.~\ref{fig:hawser}b). Fishtailing begins at
-$L_H/L=0.121$ for $C_F=0.0223$ and at $0.143$ for $C_F=0.0247$. The onset is so steep that it looks like a jump on a coarse
-grid: at $C_F=0.0223$ the swing is already $\pm23^\circ$ only $0.01$ past the critical length. In a fine sweep in both
-directions the amplitudes agree within $0.1^\circ$ and extrapolate to zero at the critical length, and every cycle is
-stable, so this Hopf bifurcation is also supercritical. The swing in $\gamma$ reaches about $\pm53^\circ$ near
-$L_H/L=0.3$ and then falls. The short-hawser tank tests swing less, which Simos attributes to the limited tank length.
-
-\section{Wind: imperfect pitchfork}\label{sec:wind}
-The wind is a constant force of fixed direction at midship, of size $F_w=C_W\tfrac12\rho U^2LT$. It adds linearly to the rest condition,
-\begin{equation}
-C_{6C}+\frac{x_W}{L}Y_w-\frac{x_A}{L}\bigl(C_{2C}+Y_w\bigr)=0,
-\end{equation}
-where $Y_w$ is the side component of $C_W$ on the hull. A side wind breaks the symmetry, and the pitchfork splits into a
-smooth branch and a separate branch ending at a fold, which moves aft as the wind grows (Fig.~\ref{fig:wind}a).
-
+\subsection{Wind: imperfect pitchfork}
 \begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig06_wind}
-\caption{(a) Imperfect pitchfork for a beam wind of $0.20\,\FHz$ from port, over the no-wind diagram. (b) Hysteresis at $x_A/L=0.25$; simulated sweeps follow the stable branches and jump just past the folds.}
+\centering\includegraphics[width=0.93\linewidth]{fig05_wind}
+\caption{Effect of a side wind. (a) Imperfect pitchfork for a beam wind of $0.20\,\FHz$ from port, over the no-wind diagram. (b)
+Hysteresis at $x_A/L=0.25$; simulated sweeps follow the stable branches and jump just past the folds.}
 \label{fig:wind}
 \end{figure}
+\begin{itemize}
+\item \textbf{Set-up:} wind force $F_w/\FHz$ and direction varied; $x_A/L=0.25$ (aft of the pitchfork), $L_H/L=0.5$
+and $C_F=0.05$. The wind is a constant force acting at midship.
+\item A side wind breaks the mirror symmetry. The pitchfork splits into one smooth branch and one that ends at a fold
+(Fig.~\ref{fig:wind}a). The reduced equation is Strogatz's imperfect pitchfork with $\psi|\psi|$ in place of $x^3$,
+\[
+\dot\psi=h+r\psi-q\psi|\psi|,\qquad \text{folds at } h=\pm\frac{r^2}{4q},
+\]
+where $h$ is the side part of the wind force.
+\item The ship keeps its side until the wind passes the fold, at $\pm0.153\,\FHz$ for a beam wind, and then swings
+across. It does not swing back when the wind drops: hysteresis (Fig.~\ref{fig:wind}b).
+\item At the fold a stable and an unstable rest position meet with a zero eigenvalue and vanish (saddle-node). Other
+directions need more wind, and wind from ahead or astern keeps the pitchfork perfect.
+\item The ship ends up on the upwind side. The wind acts aft of the hawser point and turns the bow into the wind, and the
+hull's lift in the current then carries the ship that way.
+\end{itemize}
 
-At $x_A/L=0.25$ the folds lie at $F_w/\FHz=\pm0.153$, and slow simulated sweeps jump at the next step, $\pm0.16$
-(Fig.~\ref{fig:wind}b). Between the folds both sides are stable, so the ship stays put until the wind exceeds the fold
-force. The normal form $\dot x=h+rx-x|x|$ has folds at $h=\pm r^2/4$, and the fold lines meet in a cusp at the original
-pitchfork point. The measured width exponent of 2.12 is close to the predicted 2 and well away from Strogatz's $\tfrac32$.
-Somewhat unexpectedly, the ship ends up on the upwind side, because the wind acts aft of the hawser point and turns the
-bow into the wind, and the hull lift then carries the ship that way.
-
-\section{Control by tug and stern thruster}\label{sec:control}
-The base case ($x_A/L=L_H/L=0.5$, $C_F=0.03$) fishtails with $\gamma=\pm33^\circ$ and $\psi=\pm11^\circ$. A
-\emph{hold-back tug} pulls with force $F_{tug}$ downstream from the stern. This raises the hawser tension to
-$\FHz+F_{tug}$, and once the bow swings off, the sideways part of the pull, about $F_{tug}\psi$, acts like a weathervane
-tail. The swing shrinks linearly and disappears at a Hopf point, $F_{tug}=0.301\,\FHz$ (Fig.~\ref{fig:tug}a), but the
-pull needed rises to about $2.2\,\FHz$ at real-ship friction ($C_F=0.01$).
-
+\subsection{Control by tug}
 \begin{figure}[t]
-\centering\includegraphics[width=\linewidth]{fig07_tug_and_boundary}
-\caption{(a) Tug at $C_F=0.03$. (b) Hopf boundary with and without control at $x_A/L=0.5$; the thruster uses the gains $\bigstar$ of Fig.~\ref{fig:thruster}.}
+\centering\includegraphics[width=0.93\linewidth]{fig06_tug}
+\caption{(a) Hold-back tug at $C_F=0.03$: the swing shrinks to a Hopf point. (b) Hopf boundary with and without control at
+$x_A/L=0.5$; the thruster uses the gains $\bigstar$ of Fig.~\ref{fig:thruster}.}
 \label{fig:tug}
 \end{figure}
+\begin{itemize}
+\item \textbf{Set-up:} tug pull $F_{tug}/\FHz$ and $C_F$ varied; hawser at the bow and $L_H/L=0.5$.
+\item A hold-back tug at the stern pulls steadily downstream. It raises the hawser tension to $\FHz+F_{tug}$, and once
+the bow swings off, the sideways part of its pull, about $F_{tug}\psi$, acts like a weathervane tail.
+\item At $C_F=0.03$ the swing shrinks linearly with the pull and disappears at a Hopf point, $F_{tug}=0.301\,\FHz$
+(Fig.~\ref{fig:tug}a).
+\item A faster current needs much more pull: $0.66\,\FHz$ at $C_F=0.022$ and $2.24\,\FHz$ at $C_F=0.010$, the real ship
+at about 1~m/s.
+\item A pull of $0.5\,\FHz$ lowers the Hopf friction at $L_H/L=0.5$ from $0.0425$ to $0.025$ (Fig.~\ref{fig:tug}b).
+\end{itemize}
 
-A \emph{stern thruster} at $x_T=-L/2$ applies a PD law in non-dimensional form,
-\begin{equation}
-N_c^*=-k_p\psi-k_dr^*,\qquad Y_T=\frac{N_c}{x_T},\qquad |Y_T|\le\text{limit}\times\FHz,
-\end{equation}
-with $N_c^*=N_c/(\tfrac12\rho U^2L^2T)$ and $r^*=rL/U$. The swing stops at $k_d=0.0064$ when $k_p=0$, or at $k_p=0.0131$
-when $k_d=0$. The gains needing the least thrust for a decay rate $\sigma\ge0.05\,U/L$ are $k_p=0.004$ and $k_d=0.012$, with
-a peak of $0.082\,\FHz$ when switched on during a full fishtail (Fig.~\ref{fig:thruster}a). One eigenvalue, at
-$-0.22\,U/L$, does not move with the gains. It is a slow sideways drift that heading control cannot see, and it caps
-$\sigma$ at 0.22.
-
+\subsection{Control by stern thruster}
 \begin{figure}[t]
-\centering\includegraphics[width=0.92\linewidth]{fig08_thruster}
-\caption{Stern thruster at $C_F=0.03$. (a) Decay rate over the gain plane; $\bigstar$ marks the least-thrust gains. (b) Swing left after $600\,t^*$ against the thrust limit at the $\bigstar$ gains; the shaded band is bistable.}
+\centering\includegraphics[width=0.86\linewidth]{fig07_thruster}
+\caption{Stern thruster at $C_F=0.03$. (a) Decay rate over the gain plane; $\bigstar$ marks the least-thrust gains. (b)
+Swing left after $600\,t^*$ against the thrust limit; the shaded band is bistable.}
 \label{fig:thruster}
 \end{figure}
+\begin{itemize}
+\item \textbf{Set-up:} gains $k_d$, $k_p$ and thrust limit varied; $x_A/L=L_H/L=0.5$ and $C_F=0.03$.
+\item The ship's own stern thruster, at $x_T=-L/2$, follows a PD law on the heading:
+\[
+N_c^*=-k_p\psi-k_dr^*,\qquad Y_T=\frac{N_c}{x_T},\qquad |Y_T|\le\text{limit}\times\FHz,
+\]
+where $N_c^*=N_c/(\tfrac12\rho U^2L^2T)$ and $r^*=rL/U$.
+\item $k_d$ adds the damping that the Hopf instability lacks: $k_d=0.0064$ alone stops the swing, or $k_p=0.0131$ alone.
+\item The gains needing the least thrust for a decay rate $\sigma=-\max\operatorname{Re}\lambda\ge0.05\,U/L$ are
+$k_p=0.004$, $k_d=0.012$, with a peak thrust of $0.082\,\FHz$ (Fig.~\ref{fig:thruster}a).
+\item One eigenvalue, $-0.221\,U/L$, a slow sideways drift that heading control cannot see, never moves, so
+$\sigma\le0.22$.
+\item A thrust limit does not change the eigenvalues but matters for large swings. Between $0.0063$ and
+$0.0113\,\FHz$ the system is bistable: the full fishtail survives while a small nudge dies out
+(Fig.~\ref{fig:thruster}b).
+\item With these gains the Hopf friction drops to $0.0099$ at $L_H/L=0.5$, and for $L_H/L\ge0.55$ fishtailing is gone at
+every $C_F$ (Fig.~\ref{fig:tug}b).
+\end{itemize}
 
-A thrust limit leaves the eigenvalues unchanged but affects large swings. For limits between $0.0063$ and $0.0113\,\FHz$
-the system is bistable: a full fishtail carries on while a small nudge dies away (Fig.~\ref{fig:thruster}b). At
-$L_H/L=0.5$ a tug of $0.5\,\FHz$ lowers the Hopf friction from $0.0425$ to $0.025$ and the thruster lowers it to $0.0099$,
-and for $L_H/L\ge0.55$ the thruster removes fishtailing at every $C_F\ge10^{-4}$ (Fig.~\ref{fig:tug}b). Tug and thruster
-sizes are given as ratios because we found no cited values for a VLCC. We also found no source describing a hold-back tug
-as a cure for fishtailing, so that conclusion rests on our model.
-
-\section{Conclusions and limitations}\label{sec:conclusions}
-Table~\ref{tab:summary} summarises the results.
-
-\begin{table}[h]
+\section{Conclusions and limitations}
+Each behaviour of the moored ship matches a standard bifurcation (Table~\ref{tab:summary}), and because the limiting
+force is quadratic drag the branches grow linearly.
+\begin{table}[H]
 \centering\footnotesize
-\caption{Bifurcations and their thresholds.}
+\caption{Bifurcations found in the six cases.}
 \label{tab:summary}
 \begin{tabular}{@{}llll@{}}
 \toprule
-Parameter & Bifurcation & Threshold & Character\\
+Case & Parameter & Bifurcation & Threshold\\
 \midrule
-Attachment $x_A/L$ & Pitchfork & 0.359 loaded, 0.193 ballast & Supercritical, linear growth\\
-Friction $C_F$ & Hopf & 0.0425 ($L_H/L=0.5$) & Supercritical, linear growth\\
-Hawser length $L_H/L$ & Hopf & 0.121 ($C_F=0.0223$) & Supercritical, steep onset\\
-Side wind $F_w/\FHz$ & Imperfect pitchfork & folds at $\pm0.153$ ($x_A/L=0.25$) & Hysteresis, cusp\\
-Tug $F_{tug}/\FHz$ & Hopf & 0.301 ($C_F=0.03$) & Swing shrinks linearly\\
-Thruster gains & Hopf & $k_d=0.0064$ or $k_p=0.0131$ & Bistable under thrust limit\\
+Attachment point & $x_A/L$ & Supercritical pitchfork & 0.359\\
+Friction & $C_F$ & Supercritical Hopf & 0.0425\\
+Hawser length & $L_H/L$ & Supercritical Hopf & 0.202 ($C_F=0.03$)\\
+Wind & $F_w/\FHz$ & Imperfect pitchfork, hysteresis & folds at $\pm0.153$ (beam wind)\\
+Tug & $F_{tug}/\FHz$ & Hopf & 0.301 ($C_F=0.03$)\\
+Thruster & $k_d$, $k_p$ & Hopf, bistable with a thrust limit & $k_d=0.0064$ or $k_p=0.0131$\\
 \bottomrule
 \end{tabular}
 \end{table}
-
-These results depend on the rigid hawser and on the cross-flow model, the least certain part of the hydrodynamics near
-$\psi=0$. In a separate six-state run with a measured nylon rope law \cite{huang} the boundaries moved by less than
-5\,\%, but at 1~m/s the rope was slack 74\,\% of the time and snatch loads reached $14\,\FHz$ (an upper estimate, as the
-rope had no damping). Flume tests have shown a subcritical Hopf bifurcation \cite{aghamohammadi}, unlike our model, so the
-type may depend on the set-up. Wave-making effects are not modelled, and the wind is a constant force. The results can
-also be explored in an interactive version at\\
+\begin{itemize}
+\item The hawser is rigid. In a separate run with a measured nylon rope law \cite{huang} the boundaries moved by less
+than 5\,\%, but at 1~m/s the rope was slack 74\,\% of the time and snatch loads reached $14\,\FHz$.
+\item Flume tests have shown a subcritical Hopf bifurcation \cite{aghamohammadi}, unlike our model, so the type may
+depend on the set-up.
+\item The wind is a constant force, tug and thruster sizes are ratios as we found no cited VLCC values, and the tug
+as a cure for fishtailing is a result of our model only.
+\item An interactive version of these results is available at\\
 \url{https://aaravpatel007.github.io/Moored-Tanker-Fishtailing/interactive/}.
+\end{itemize}
 
 \begingroup
 \footnotesize

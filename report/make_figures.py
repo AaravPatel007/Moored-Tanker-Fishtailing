@@ -1,6 +1,6 @@
 """Draw the figures used in the report, sized for the page and without titles (the LaTeX captions carry those).
 
-Run from the project root, after report.hawser_onset_sweep:
+Run from the project root, after report.hawser_sweep:
     python3 -m report.make_figures
 
 Long sweeps are not repeated: they are read from data/E05_limit_cycles, data/E08_control and report/data. Everything
@@ -17,12 +17,11 @@ import numpy as np
 from matplotlib.patches import Arc
 
 from experiments.E03_pitchfork.run import draw_pitchfork
-from experiments.E04_hopf.run import BLUES
 from experiments.E10_wind.run import draw_diagram, no_wind_reference, s_curve, signed_beam, sweep, windy
 from fishtail import continuation as co
 from fishtail import control, hydro
 from fishtail import model_rigid as mr
-from fishtail.params import SEA_WATER, SIMOS_FIG53, SIMOS_FIG517, VIDAL_100, VIDAL_40
+from fishtail.params import SEA_WATER, SIMOS_FIG53, VIDAL_100
 from fishtail.plotting import COLORS, INK, INK_2, MUTED, ROOT, draw_mooring, plot_branch, use_style
 
 OUT = Path(__file__).resolve().parent / "figures"
@@ -95,8 +94,7 @@ def fig_schematic():
 
 def fig_pitchfork():
     fig, ax = plt.subplots(figsize=(3.7, 2.1))
-    for color, hull, label in [(COLORS[0], VIDAL_100, "100 % load"), (COLORS[1], VIDAL_40, "40 % load")]:
-        draw_pitchfork(ax, hull, color, label, 0.5, 0.05, show_hopf=False)
+    draw_pitchfork(ax, VIDAL_100, COLORS[0], "rest heading", 0.5, 0.05, show_hopf=False)
     ax.plot([], [], color=INK_2, label="stable")
     ax.plot([], [], color=INK_2, ls=DASH, label="unstable")
     ax.plot([], [], "^", color=INK_2, ms=7, ls="none", label="pitchfork")
@@ -109,39 +107,7 @@ def fig_pitchfork():
     save(fig, "fig02_pitchfork")
 
 
-# --- Fig. 3: eigenvalues through the Hopf point ------------------------------------------------------------------------
-
-def fig_eigenvalues():
-    base = mr.Rigid(VIDAL_100, x_A_L=0.5, L_H_L=0.5, C_F=0.03)
-    C_crit = co.hopf_C_F(base)
-    C_values = np.geomspace(0.005, 0.1, 120)
-    eigs = [np.linalg.eigvals(mr.linear_jacobian_star(replace(base, C_F=C))) for C in C_values]
-    eig_c = np.linalg.eigvals(mr.linear_jacobian_star(replace(base, C_F=C_crit)))
-    pair = eig_c[np.abs(eig_c.imag) > 1e-9]
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(WIDTH, 1.75), gridspec_kw={"width_ratios": [1.45, 1]})
-    for ax in (a1, a2):
-        for C, eig in zip(C_values, eigs):
-            ax.scatter(eig.real, eig.imag, s=5, color=BLUES((np.log(C) - np.log(0.005)) / np.log(20)), lw=0)
-        ax.plot(pair.real, pair.imag, "o", ms=7, color=INK, mfc="white", mew=1.3, zorder=5)
-        ax.axvline(0, color=INK_2, lw=0.9)
-        ax.axhline(0, color=MUTED, lw=0.7)
-        ax.set_xlabel(r"Re $\lambda$ [$U/L$]")
-    a1.set_ylabel(r"Im $\lambda$ [$U/L$]")
-    panel(a1, "a")
-    panel(a2, "b")
-    a2.set_xlim(-0.12, 0.16)
-    a2.set_ylim(0.2, 1.1)
-    a2.annotate("friction falls", xy=(0.0, float(np.abs(pair.imag).max())), xytext=(0.045, 0.93), fontsize=8,
-                arrowprops=dict(arrowstyle="->", color=INK_2, lw=0.7))
-    a2.plot([], [], "o", ms=7, color=INK, mfc="white", mew=1.3, ls="none", label=rf"Hopf, $C_F$ = {C_crit:.4f}")
-    a2.legend(loc="lower left")
-    sm = plt.cm.ScalarMappable(cmap=BLUES, norm=plt.matplotlib.colors.LogNorm(0.005, 0.1))
-    fig.colorbar(sm, ax=a2, pad=0.02, label=r"$C_F$")
-    fig.tight_layout(pad=0.4)
-    save(fig, "fig03_eigenvalues")
-
-
-# --- Fig. 4: limit-cycle amplitude against friction --------------------------------------------------------------------
+# --- Fig. 3: limit-cycle amplitude against friction --------------------------------------------------------------------
 
 def fig_amplitude():
     data = load("E05_limit_cycles")
@@ -169,63 +135,49 @@ def fig_amplitude():
         panel(ax, letter)
     axes[0].legend(loc="upper right")
     fig.tight_layout(pad=0.4)
-    save(fig, "fig04_amplitude")
+    save(fig, "fig03_friction")
 
 
 # --- Fig. 5: hawser length ---------------------------------------------------------------------------------------------
 
 def fig_hawser():
     L_H = np.linspace(0.02, 2.0, 100)
+    sweeps = {r["direction"]: r for r in json.loads((OUT.parent / "data" / "hawser_sweep.json").read_text())}
+    L_cr, C_tab = sweeps["up"]["L_cr"], sweeps["up"]["C_F"]
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(WIDTH, 2.0))
-    for color, hull, key, label in [(COLORS[0], VIDAL_100, "100", "100 % load"), (COLORS[1], VIDAL_40, "40", "40 % load")]:
-        x_A = SIMOS_FIG53[key]["x_A_L"]
-        a1.plot(L_H, co.hopf_curve(mr.Rigid(hull, x_A, 0.5, 0.03), L_H), color=color, lw=1.8,
-                label=rf"{label}, $x_A/L$ = {x_A}")
-        a1.plot(SIMOS_FIG53["L_H_L"], SIMOS_FIG53[key]["C_F"], "o", color=INK, ms=3.6, mfc="white", mew=0.9)
-    a1.plot([], [], "o", color=INK, ms=3.6, mfc="white", mew=0.9, label="Simos (2001), Fig. 5.3", ls="none")
+    a1.plot(L_H, co.hopf_curve(mr.Rigid(VIDAL_100, 0.5, 0.5, 0.03), L_H), color=COLORS[0], lw=1.8, label="this model")
+    a1.plot(SIMOS_FIG53["L_H_L"], SIMOS_FIG53["100"]["C_F"], "o", color=INK, ms=3.6, mfc="white", mew=0.9,
+            label="Simos (2001), Fig. 5.3", ls="none")
+    a1.axhline(C_tab, color=MUTED, lw=0.8, ls=":")
+    a1.plot(L_cr, C_tab, "o", color=INK, ms=5.5, zorder=6)
     a1.set_xlim(0, 2)
     a1.set_ylim(0, 0.06)
     a1.text(1.5, 0.054, "stable: trails straight", ha="center", fontsize=8, color=INK_2)
-    a1.text(1.0, 0.0245, "unstable: fishtails", ha="center", fontsize=8, color=INK_2)
+    a1.text(1.5, 0.022, "unstable: fishtails", ha="center", fontsize=8, color=INK_2)
     a1.set_xlabel(r"hawser length $L_H/L$")
     a1.set_ylabel(r"Hopf friction $C_F$")
     a1.legend(loc="lower right")
     panel(a1, "a")
 
-    data = load("E05_limit_cycles")["fig05"]
-    onset = {(r["C_F"], r["direction"]): r for r in json.loads((OUT.parent / "data" / "hawser_onset.json").read_text())}
-    for color, C in [(COLORS[0], 0.0223), (COLORS[1], 0.0247)]:
-        d = data[str(C)]
-        fine = onset[(C, "up")]["rows"]
-        fine_L = np.array([r["L_H_L"] for r in fine])
-        # coarse curve outside the range of the fine sweep, fine sweep inside it
-        L = np.array(d["L_H_L"])
-        g = np.array(d["gamma_amp"])
-        p = np.array(d["psi_amp"])
-        keep = (L < fine_L.min()) | (L > fine_L.max())
-        all_L = np.concatenate([L[keep], fine_L])
-        order = np.argsort(all_L)
-        a2.plot(all_L[order], np.concatenate([g[keep], [r["gamma_amp_deg"] for r in fine]])[order], color=color,
-                label=rf"$\gamma$, $C_F$ = {C}")
-        a2.plot(all_L[order], np.concatenate([p[keep], [r["psi_amp_deg"] for r in fine]])[order], color=color,
-                ls=(0, (1, 1.5)), label=rf"$\psi$, $C_F$ = {C}")
-        for key, marker in [("up", "^"), ("down", "v")]:
-            rows = onset[(C, key)]["rows"]
-            a2.plot([r["L_H_L"] for r in rows], [r["gamma_amp_deg"] for r in rows], marker, color=color, ms=2.8,
-                    mfc="none", mew=0.6)
-    th = SIMOS_FIG517
-    a2.plot(th["exp_L_H_L"], th["exp_gamma_deg"], "P", color=INK, ms=4.5, mfc="white", mew=0.8,
-            label=r"tank test $\gamma$", ls="none")
-    a2.plot(th["exp_L_H_L"], th["exp_psi_deg"], "o", color=INK, ms=3.8, mfc="white", mew=0.8,
-            label=r"tank test $\psi$", ls="none")
-    a2.set_xlim(0, 1.4)
-    a2.set_ylim(0, 88)
+    up = sweeps["up"]["rows"]
+    L = np.array([r["L_H_L"] for r in up])
+    a2.plot(L, [r["gamma_amp_deg"] for r in up], color=COLORS[0], label=r"swing of $\gamma$")
+    a2.plot(L, [r["psi_amp_deg"] for r in up], color=COLORS[1], label=r"swing of $\psi$")
+    for key, marker, label in [("up", "^", "length increasing"), ("down", "v", "length decreasing")]:
+        rows = sweeps[key]["rows"]
+        for c, var in [(COLORS[0], "gamma_amp_deg"), (COLORS[1], "psi_amp_deg")]:
+            a2.plot([r["L_H_L"] for r in rows], [r[var] for r in rows], marker, color=c, ms=3.2, mfc="none", mew=0.7)
+        a2.plot([], [], marker, color=INK_2, ms=3.2, mfc="none", mew=0.7, ls="none", label=label)
+    a2.plot(L_cr, 0, "o", color=INK, ms=5.5, mec="white", mew=0.8, zorder=6, label="Hopf point")
+    a2.set_xlim(0, 1.5)
+    a2.set_ylim(-1, 50)
     a2.set_xlabel(r"hawser length $L_H/L$")
     a2.set_ylabel("swing amplitude [deg]")
-    a2.legend(loc="upper right", ncol=3, fontsize=6.6, columnspacing=0.7, handlelength=1.6, handletextpad=0.4, borderaxespad=0.1)
+    a2.legend(loc="upper right", ncol=3, fontsize=6.4, columnspacing=0.7, handlelength=1.4, handletextpad=0.3,
+               borderaxespad=0.1)
     panel(a2, "b")
     fig.tight_layout(pad=0.4)
-    save(fig, "fig05_hawser_length")
+    save(fig, "fig04_hawser_length")
 
 
 # --- Fig. 6: wind ------------------------------------------------------------------------------------------------------
@@ -264,7 +216,7 @@ def fig_wind():
     a2.legend(loc="upper left", handletextpad=0.2, ncol=2, columnspacing=0.8)
     panel(a2, "b")
     fig.tight_layout(pad=0.4)
-    save(fig, "fig06_wind")
+    save(fig, "fig05_wind")
 
 
 # --- Figs. 7 and 8: control --------------------------------------------------------------------------------------------
@@ -309,7 +261,7 @@ def fig_tug():
     a2.legend(loc="upper right", ncol=3, fontsize=6.8, columnspacing=0.8, handlelength=1.5, borderaxespad=0.1)
     panel(a2, "b")
     fig.tight_layout(pad=0.4)
-    save(fig, "fig07_tug_and_boundary")
+    save(fig, "fig06_tug")
 
 
 def fig_thruster():
@@ -341,14 +293,13 @@ def fig_thruster():
     a2.legend(loc="upper right")
     panel(a2, "b")
     fig.tight_layout(pad=0.4)
-    save(fig, "fig08_thruster")
+    save(fig, "fig07_thruster")
 
 
 def main():
     style()
     fig_schematic()
     fig_pitchfork()
-    fig_eigenvalues()
     fig_amplitude()
     fig_hawser()
     fig_wind()
